@@ -7,8 +7,10 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 ## What works today
 
 - Parses JSON into the required OpenRPC document, `info`, and method metadata.
+- Preserves ordered parameters (`name`, `required`, and raw `schema`) and optional result descriptors.
 - Accepts OpenRPC 1.x documents and rejects other major versions.
-- Reports invalid JSON, missing fields, wrong field types, and non-object methods with JSON-style paths.
+- Rejects duplicate method names and reports invalid JSON, missing fields, wrong field types, and non-object methods with JSON-style paths.
+- Supports deterministic lookup with `Document::find_method`.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
 
 ## Small example
@@ -34,7 +36,7 @@ match @openrpc.Document::parse(source) {
 
 ## Deliberate boundary
 
-The first milestone stabilizes the document model and diagnostics before adding code generation. Transport, complete JSON Schema evaluation, `$ref` loading from the network, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model and diagnostics before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 
