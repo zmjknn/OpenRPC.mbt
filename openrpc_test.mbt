@@ -142,3 +142,103 @@ test "rejects a parameter without a schema" {
     Ok(_) => fail("a parameter without a schema should be rejected")
   }
 }
+
+///|
+test "builds a named JSON-RPC request from a method contract" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let params : Map[String, Json] = { "id": "abc" }
+  match method_value.build_request(7, params) {
+    Ok(request) => {
+      guard request
+        is {
+          "jsonrpc": String(version),
+          "method": String(name),
+          "params": Object(encoded_params),
+          ..
+        } else {
+        fail("request should be a JSON-RPC object")
+      }
+      assert_eq(version, "2.0")
+      assert_eq(name, "inventory.get")
+      assert_eq(encoded_params.get("id"), Some(Json::string("abc")))
+    }
+    Err(_) => fail("a complete request should be constructed")
+  }
+}
+
+///|
+test "rejects a request that omits a required parameter" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  match method_value.build_request(1, {}) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.params.id")
+      assert_true(diagnostics[0].code is MissingParameter)
+    }
+    Ok(_) => fail("a required parameter should not be omitted")
+  }
+}
+
+///|
+test "rejects a request with an undeclared parameter" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let params : Map[String, Json] = { "unexpected": true }
+  match method_value.build_request(1, params) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.params.unexpected")
+      assert_true(diagnostics[0].code is UnknownParameter)
+    }
+    Ok(_) => fail("undeclared parameters should be rejected")
+  }
+}
+
+///|
+test "builds an empty params object for parameterless methods" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  match method_value.build_request(1, {}) {
+    Ok(request) => {
+      guard request is { "params": Object(encoded_params), .. } else {
+        fail("request should include an object params value")
+      }
+      assert_eq(encoded_params.length(), 0)
+    }
+    Err(_) => fail("parameterless methods should accept an empty params object")
+  }
+}

@@ -11,6 +11,8 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Accepts OpenRPC 1.x documents and rejects other major versions.
 - Rejects duplicate method names and reports invalid JSON, missing fields, wrong field types, and non-object methods with JSON-style paths.
 - Supports deterministic lookup with `Document::find_method`.
+- Builds a JSON-RPC 2.0 request from a parsed method with the caller's request id and named parameters.
+- Rejects missing required parameters and names that are not declared by the method before a request is sent.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
 
 ## Small example
@@ -34,9 +36,18 @@ match @openrpc.Document::parse(source) {
 }
 ```
 
+After selecting a method, request construction stays pure and transport-agnostic:
+
+```moonbit
+let params : Map[String, Json] = {"id": "abc"}
+let request = method_value.build_request(7, params)
+```
+
+The result is a JSON-RPC 2.0 envelope with an object-valued `params` field. This milestone intentionally accepts named parameters only; positional encoding, schema-value validation, and transport dispatch remain separate concerns.
+
 ## Deliberate boundary
 
-The current milestone stabilizes the document model and diagnostics before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model, diagnostics, and a transport-free request boundary before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, positional parameter encoding, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 

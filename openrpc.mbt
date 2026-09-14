@@ -39,6 +39,8 @@ pub enum DiagnosticCode {
   InvalidField
   UnsupportedVersion
   DuplicateMethod
+  MissingParameter
+  UnknownParameter
 }
 
 ///|
@@ -64,6 +66,49 @@ pub fn Document::find_method(self : Document, name : String) -> Method? {
     }
   }
   None
+}
+
+///|
+pub fn Method::build_request(
+  self : Method,
+  id : Json,
+  params : Map[String, Json],
+) -> Result[Json, Array[Diagnostic]] {
+  for parameter in self.params {
+    if parameter.required && params.get(parameter.name) is None {
+      return Err([
+        diagnostic(
+          "$.params." + parameter.name,
+          MissingParameter,
+          "required parameter is missing",
+        ),
+      ])
+    }
+  }
+  for name, _value in params {
+    let mut declared = false
+    for parameter in self.params {
+      if parameter.name == name {
+        declared = true
+        break
+      }
+    }
+    if !declared {
+      return Err([
+        diagnostic(
+          "$.params." + name,
+          UnknownParameter,
+          "parameter is not declared by the method",
+        ),
+      ])
+    }
+  }
+  Ok({
+    "jsonrpc": "2.0",
+    "id": id,
+    "method": self.name,
+    "params": Json::object(params),
+  })
 }
 
 ///|
