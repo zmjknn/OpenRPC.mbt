@@ -483,3 +483,29 @@ test "preserves a null success result" {
     Err(_) => fail("a null result is valid JSON-RPC data")
   }
 }
+
+///|
+test "builds a positional JSON-RPC request in contract order" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"verbose","schema":{"type":"boolean"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let values : Array[Json] = ["abc", true]
+  match method_value.build_positional_request(9, values) {
+    Ok(request) => {
+      guard request is { "params": Array(encoded), .. } else {
+        fail("request should include an array params value")
+      }
+      assert_eq(encoded.length(), 2)
+      assert_eq(encoded[0], Json::string("abc"))
+      assert_eq(encoded[1], Json::boolean(true))
+    }
+    Err(_) => fail("a complete positional request should be constructed")
+  }
+}
