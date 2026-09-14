@@ -42,6 +42,12 @@ pub enum DiagnosticCode {
   MissingParameter
   UnknownParameter
   TooManyParameters
+  EmptyMethodName
+  EmptyParameterName
+  EmptyResultName
+  DuplicateParameter
+  OptionalBeforeRequired
+  InvalidSchemaBoundary
   EmptyBatch
   UnknownMethod
   DuplicateRequestId
