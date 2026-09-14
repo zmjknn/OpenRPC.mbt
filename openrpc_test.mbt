@@ -607,3 +607,81 @@ test "builds a named JSON-RPC notification without an id" {
     Err(_) => fail("a complete notification should be constructed")
   }
 }
+
+///|
+test "builds a positional JSON-RPC notification without an id" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}},{"name":"dry_run","schema":{"type":"boolean"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.refresh") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let values : Array[Json] = ["all"]
+  match method_value.build_positional_notification(values) {
+    Ok(notification) => {
+      guard notification is Object(fields) else {
+        fail("notification should be a JSON object")
+      }
+      assert_eq(fields.get("jsonrpc"), Some(Json::string("2.0")))
+      assert_eq(fields.get("method"), Some(Json::string("inventory.refresh")))
+      match fields.get("params") {
+        Some(Array(encoded)) => {
+          assert_eq(encoded.length(), 1)
+          assert_eq(encoded[0], Json::string("all"))
+        }
+        _ => fail("notification should include an array params value")
+      }
+      assert_true(fields.get("id") is None)
+    }
+    Err(_) => fail("a positional notification should be constructed")
+  }
+}
+
+///|
+test "named notifications reuse required parameter validation" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.refresh") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  match method_value.build_notification({}) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.params.scope")
+      assert_true(diagnostics[0].code is MissingParameter)
+    }
+    Ok(_) => fail("a required notification parameter should not be omitted")
+  }
+}
+
+///|
+test "positional notifications reuse arity validation" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.refresh") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let values : Array[Json] = [true]
+  match method_value.build_positional_notification(values) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.params")
+      assert_true(diagnostics[0].code is TooManyParameters)
+    }
+    Ok(_) => fail("extra positional notification parameters should be rejected")
+  }
+}
