@@ -188,3 +188,131 @@ test "reuses single-response envelope diagnostics" {
     Ok(_) => fail("individual envelopes still require JSON-RPC 2.0")
   }
 }
+
+///|
+test "rejects a non-object item inside the response array" {
+  let response_source =
+    #|[true]
+  match
+    batch_document_fixture().decode_batch_response(
+      response_fixture(response_source),
+      batch_calls_fixture(),
+    ) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics[0].path, "$[0]")
+      assert_true(diagnostics[0].code is InvalidBatchResponse)
+    }
+    Ok(_) => fail("every response item must be an object")
+  }
+}
+
+///|
+test "rejects a response item without an id" {
+  let response_source =
+    #|[{"jsonrpc":"2.0","result":true}]
+  match
+    batch_document_fixture().decode_batch_response(
+      response_fixture(response_source),
+      batch_calls_fixture(),
+    ) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics[0].path, "$[0].id")
+      assert_true(diagnostics[0].code is InvalidBatchResponse)
+    }
+    Ok(_) => fail("a response item without id cannot be correlated")
+  }
+}
+
+///|
+test "reports an undeclared method in the original call list" {
+  let response_source =
+    #|[{"jsonrpc":"2.0","id":303,"result":true}]
+  let calls = [
+    BatchCall::new(303, "inventory.missing", RequestParams::named({})),
+  ]
+  match
+    batch_document_fixture().decode_batch_response(
+      response_fixture(response_source),
+      calls,
+    ) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics[0].path, "$[0].method")
+      assert_true(diagnostics[0].code is UnknownMethod)
+    }
+    Ok(_) => fail("the original method must still be declared")
+  }
+}
+
+///|
+test "matches structured JSON ids rather than stringifying them" {
+  let response_source =
+    #|[{"jsonrpc":"2.0","id":{"scope":"delete"},"result":false},{"jsonrpc":"2.0","id":{"scope":"get"},"result":true}]
+  let get_id_source =
+    #|{"scope":"get"}
+  let delete_id_source =
+    #|{"scope":"delete"}
+  let calls = [
+    BatchCall::new(
+      response_fixture(get_id_source),
+      "inventory.get",
+      RequestParams::named({}),
+    ),
+    BatchCall::new(
+      response_fixture(delete_id_source),
+      "inventory.delete",
+      RequestParams::named({}),
+    ),
+  ]
+  match
+    batch_document_fixture().decode_batch_response(
+      response_fixture(response_source),
+      calls,
+    ) {
+    Ok(values) => {
+      assert_eq(values[0].method_name, "inventory.get")
+      assert_eq(values[1].method_name, "inventory.delete")
+    }
+    Err(_) => fail("object ids should use structural JSON equality")
+  }
+}
+
+///|
+test "correlates a single successful call" {
+  let response_source =
+    #|[{"jsonrpc":"2.0","id":101,"result":null}]
+  let calls = [BatchCall::new(101, "inventory.get", RequestParams::named({}))]
+  match
+    batch_document_fixture().decode_batch_response(
+      response_fixture(response_source),
+      calls,
+    ) {
+    Ok(values) =>
+      match values[0].response {
+        RpcResponse::Result(value) => assert_true(value is Null)
+        RpcResponse::Error(_) => fail("the response should be a result")
+      }
+    Err(_) => fail("a single valid response should correlate")
+  }
+}
+
+///|
+test "a missing response takes precedence after valid items" {
+  let response_source =
+    #|[{"jsonrpc":"2.0","id":202,"result":true}]
+  let calls = [
+    BatchCall::new(101, "inventory.get", RequestParams::named({})),
+    BatchCall::new(202, "inventory.delete", RequestParams::named({})),
+    BatchCall::new(303, "inventory.get", RequestParams::named({})),
+  ]
+  match
+    batch_document_fixture().decode_batch_response(
+      response_fixture(response_source),
+      calls,
+    ) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics[0].path, "$.responses[0]")
+      assert_true(diagnostics[0].code is MissingResponse)
+    }
+    Ok(_) => fail("missing calls must be reported deterministically")
+  }
+}
