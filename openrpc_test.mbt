@@ -685,3 +685,44 @@ test "positional notifications reuse arity validation" {
     Ok(_) => fail("extra positional notification parameters should be rejected")
   }
 }
+
+///|
+test "builds a mixed named and positional JSON-RPC batch" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]},{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = [
+    {
+      id: 1,
+      method_name: "inventory.get",
+      params: RequestParams::Named({ "id": "abc" }),
+    },
+    {
+      id: 2,
+      method_name: "inventory.refresh",
+      params: RequestParams::Positional(["all"]),
+    },
+  ]
+  match document.build_batch(calls) {
+    Ok(batch) => {
+      guard batch is Array(entries) else {
+        fail("batch should be a JSON array")
+      }
+      assert_eq(entries.length(), 2)
+      guard entries[0] is Object(first) else {
+        fail("first batch entry should be an object")
+      }
+      guard entries[1] is Object(second) else {
+        fail("second batch entry should be an object")
+      }
+      assert_eq(first.get("method"), Some(Json::string("inventory.get")))
+      assert_eq(second.get("method"), Some(Json::string("inventory.refresh")))
+      assert_eq(first.get("id"), Some(Json::number(1.0)))
+      assert_eq(second.get("id"), Some(Json::number(2.0)))
+    }
+    Err(_) => fail("a valid mixed batch should be constructed")
+  }
+}
