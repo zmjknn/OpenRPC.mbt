@@ -718,3 +718,128 @@ test "builds a mixed named and positional JSON-RPC batch" {
     Err(_) => fail("a valid mixed batch should be constructed")
   }
 }
+
+///|
+test "rejects an empty JSON-RPC batch" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = []
+  match document.build_batch(calls) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$")
+      assert_true(diagnostics[0].code is EmptyBatch)
+    }
+    Ok(_) => fail("an empty batch is not a valid JSON-RPC payload")
+  }
+}
+
+///|
+test "reports an unknown method at its batch index" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = [
+    BatchCall::new(1, "inventory.missing", RequestParams::named({})),
+  ]
+  match document.build_batch(calls) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$[0].method")
+      assert_true(diagnostics[0].code is UnknownMethod)
+    }
+    Ok(_) => fail("an undeclared method should be rejected")
+  }
+}
+
+///|
+test "rejects duplicate request ids in a batch" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = [
+    BatchCall::new(1, "inventory.list", RequestParams::named({})),
+    BatchCall::new(1, "inventory.list", RequestParams::named({})),
+  ]
+  match document.build_batch(calls) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$[1].id")
+      assert_true(diagnostics[0].code is DuplicateRequestId)
+    }
+    Ok(_) => fail("duplicate request ids should be rejected")
+  }
+}
+
+///|
+test "prefixes named parameter diagnostics with the batch index" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = [
+    BatchCall::new(1, "inventory.get", RequestParams::named({})),
+  ]
+  match document.build_batch(calls) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$[0].params.id")
+      assert_true(diagnostics[0].code is MissingParameter)
+    }
+    Ok(_) => fail("missing required parameters should be rejected")
+  }
+}
+
+///|
+test "prefixes unknown named parameters with the batch index" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = [
+    BatchCall::new(1, "inventory.list", RequestParams::named({ "extra": true })),
+  ]
+  match document.build_batch(calls) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$[0].params.extra")
+      assert_true(diagnostics[0].code is UnknownParameter)
+    }
+    Ok(_) => fail("unknown parameters should be rejected")
+  }
+}
+
+///|
+test "prefixes positional arity diagnostics with the batch index" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let calls : Array[BatchCall] = [
+    BatchCall::new(1, "inventory.list", RequestParams::positional([true])),
+  ]
+  match document.build_batch(calls) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$[0].params")
+      assert_true(diagnostics[0].code is TooManyParameters)
+    }
+    Ok(_) => fail("extra positional parameters should be rejected")
+  }
+}
