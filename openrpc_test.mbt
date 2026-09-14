@@ -695,16 +695,8 @@ test "builds a mixed named and positional JSON-RPC batch" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[BatchCall] = [
-    {
-      id: 1,
-      method_name: "inventory.get",
-      params: RequestParams::Named({ "id": "abc" }),
-    },
-    {
-      id: 2,
-      method_name: "inventory.refresh",
-      params: RequestParams::Positional(["all"]),
-    },
+    BatchCall::new(1, "inventory.get", RequestParams::named({ "id": "abc" })),
+    BatchCall::new(2, "inventory.refresh", RequestParams::positional(["all"])),
   ]
   match document.build_batch(calls) {
     Ok(batch) => {

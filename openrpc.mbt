@@ -42,6 +42,9 @@ pub enum DiagnosticCode {
   MissingParameter
   UnknownParameter
   TooManyParameters
+  EmptyBatch
+  UnknownMethod
+  DuplicateRequestId
   InvalidResponse
   ResponseIdMismatch
   InvalidRpcError
@@ -68,6 +71,38 @@ pub enum RpcResponse {
 }
 
 ///|
+pub enum RequestParams {
+  Named(Map[String, Json])
+  Positional(Array[Json])
+}
+
+///|
+pub struct BatchCall {
+  id : Json
+  method_name : String
+  params : RequestParams
+}
+
+///|
+pub fn RequestParams::named(params : Map[String, Json]) -> RequestParams {
+  RequestParams::Named(params)
+}
+
+///|
+pub fn RequestParams::positional(values : Array[Json]) -> RequestParams {
+  RequestParams::Positional(values)
+}
+
+///|
+pub fn BatchCall::new(
+  id : Json,
+  method_name : String,
+  params : RequestParams,
+) -> BatchCall {
+  { id, method_name, params, }
+}
+
+///|
 pub fn Document::parse(source : String) -> Result[Document, Array[Diagnostic]] {
   let value = @json.parse(source) catch {
     _ => return Err([diagnostic("$", InvalidJson, "source is not valid JSON")])
@@ -86,12 +121,79 @@ pub fn Document::find_method(self : Document, name : String) -> Method? {
 }
 
 ///|
+pub fn Document::build_batch(
+  self : Document,
+  calls : Array[BatchCall],
+) -> Result[Json, Array[Diagnostic]] {
+  if calls.length() == 0 {
+    return Err([
+      diagnostic("$", EmptyBatch, "a JSON-RPC batch must contain a call"),
+    ])
+  }
+  let requests : Array[Json] = []
+  let ids : Array[Json] = []
+  for index, call in calls {
+    let call_path = "$[" + index.to_string() + "]"
+    for previous_id in ids {
+      if Json::equal(previous_id, call.id) {
+        return Err([
+          diagnostic(
+            call_path + ".id",
+            DuplicateRequestId,
+            "request ids must be unique within a batch",
+          ),
+        ])
+      }
+    }
+    ids.push(call.id)
+    let method_value = match self.find_method(call.method_name) {
+      Some(value) => value
+      None =>
+        return Err([
+          diagnostic(
+            call_path + ".method",
+            UnknownMethod,
+            "method is not declared by the document",
+          ),
+        ])
+    }
+    let request : Json = match call.params {
+      RequestParams::Named(params) =>
+        match validate_named_params(method_value.params, params, call_path) {
+          Err(diagnostics) => return Err(diagnostics)
+          Ok(_) =>
+            {
+              "jsonrpc": "2.0",
+              "id": call.id,
+              "method": method_value.name,
+              "params": Json::object(params),
+            }
+        }
+      RequestParams::Positional(values) =>
+        match
+          validate_positional_params(method_value.params, values, call_path) {
+          Err(diagnostics) => return Err(diagnostics)
+          Ok(_) =>
+            {
+              "jsonrpc": "2.0",
+              "id": call.id,
+              "method": method_value.name,
+              "params": Json::array(values),
+            }
+        }
+    }
+    requests.push(request)
+  }
+  Ok(Json::array(requests))
+}
+
+///|
 pub fn Method::build_request(
   self : Method,
   id : Json,
   params : Map[String, Json],
 ) -> Result[Json, Array[Diagnostic]] {
-  match validate_named_params(self.params, params) {
+  match validate_named_params(self.params, params, "$") {
     Err(diagnostics) => Err(diagnostics)
     Ok(_) =>
       Ok({
@@ -108,7 +210,7 @@ pub fn Method::build_notification(
   self : Method,
   params : Map[String, Json],
 ) -> Result[Json, Array[Diagnostic]] {
-  match validate_named_params(self.params, params) {
+  match validate_named_params(self.params, params, "$") {
     Err(diagnostics) => Err(diagnostics)
     Ok(_) =>
       Ok({
@@ -125,7 +227,7 @@ pub fn Method::build_positional_request(
   id : Json,
   values : Array[Json],
 ) -> Result[Json, Array[Diagnostic]] {
-  match validate_positional_params(self.params, values) {
+  match validate_positional_params(self.params, values, "$") {
     Err(diagnostics) => Err(diagnostics)
     Ok(_) =>
       Ok({
@@ -142,7 +244,7 @@ pub fn Method::build_positional_notification(
   self : Method,
   values : Array[Json],
 ) -> Result[Json, Array[Diagnostic]] {
-  match validate_positional_params(self.params, values) {
+  match validate_positional_params(self.params, values, "$") {
     Err(diagnostics) => Err(diagnostics)
     Ok(_) =>
       Ok({
@@ -157,12 +259,13 @@ pub fn Method::build_positional_notification(
 fn validate_named_params(
   declarations : Array[Parameter],
   params : Map[String, Json],
+  path_prefix : String,
 ) -> Result[Unit, Array[Diagnostic]] {
   for parameter in declarations {
     if parameter.required && params.get(parameter.name) is None {
       return Err([
         diagnostic(
-          "$.params." + parameter.name,
+          path_prefix + ".params." + parameter.name,
           MissingParameter,
           "required parameter is missing",
         ),
@@ -180,7 +283,7 @@ fn validate_named_params(
     if !declared {
       return Err([
         diagnostic(
-          "$.params." + name,
+          path_prefix + ".params." + name,
           UnknownParameter,
           "parameter is not declared by the method",
         ),
@@ -194,11 +297,12 @@ fn validate_named_params(
 fn validate_positional_params(
   declarations : Array[Parameter],
   values : Array[Json],
+  path_prefix : String,
 ) -> Result[Unit, Array[Diagnostic]] {
   if values.length() > declarations.length() {
     return Err([
       diagnostic(
-        "$.params",
+        path_prefix + ".params",
         TooManyParameters,
         "too many positional parameters were provided",
       ),
@@ -208,7 +312,7 @@ fn validate_positional_params(
     if index >= values.length() && parameter.required {
       return Err([
         diagnostic(
-          "$.params[" + index.to_string() + "]",
+          path_prefix + ".params[" + index.to_string() + "]",
           MissingParameter,
           "required parameter is missing",
         ),
