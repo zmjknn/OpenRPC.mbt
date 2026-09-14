@@ -6,8 +6,8 @@ The repository is expanding toward more than 4,000 maintained lines across imple
 
 | Milestone | Scope | Evidence |
 | --- | --- | --- |
-| 1 | Portable JSON Schema subset and opt-in contract validation | Issue #15, focused recursive evaluator and fixtures |
-| 2 | Batch response correlation by request id | Indexed success/error/missing/duplicate response diagnostics |
+| 1 | Portable JSON Schema subset and opt-in contract validation | Issue #15 / PR #16, focused recursive evaluator and fixtures |
+| 2 | Batch response correlation by request id | Issue #17 / PR #17, indexed success/error/missing/duplicate response diagnostics |
 | 3 | OpenRPC metadata, examples, servers, and component references | Parsed discovery data without transport coupling |
 | 4 | Contract linter and reusable conformance fixtures | Stable lint rules, golden JSON fixtures, CI matrix |
 

@@ -18,6 +18,7 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Builds named or positional JSON-RPC notifications that omit `id` and reuse the same contract checks.
 - Builds contract-aware JSON-RPC batches from named or positional calls, checking method names and unique request ids.
 - Decodes a JSON-RPC 2.0 response for an expected request id into a raw result or structured error.
+- Correlates JSON-RPC batch responses with the original calls, reorders them deterministically, and preserves per-method result/error records.
 - Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
 - Provides a pure, portable JSON Schema subset validator for boolean schemas, primitive `type`, `enum`, `const`, object properties, arrays, string and numeric bounds, and `allOf`/`anyOf`/`oneOf`/`not` composition.
 - Exposes opt-in `Parameter::validate`, `Method::validate_named_params`, `Method::validate_positional_params`, `Method::validate_result`, and `ResultDescriptor::validate` helpers with stable JSON-style paths.
@@ -92,6 +93,21 @@ let batch = document.build_batch(calls)
 ```
 
 Batch diagnostics include the failing call index, and duplicate request ids are rejected before the JSON array is emitted. Notifications remain a separate API because they do not participate in response matching.
+
+When a server returns a batch, pass the original calls back to the document to correlate out-of-order responses:
+
+```moonbit
+match document.decode_batch_response(response, calls) {
+  Ok(values) => {
+    for value in values {
+      println(value.method_name)
+    }
+  }
+  Err(diagnostics) => println(diagnostics[0].path + ": " + diagnostics[0].message)
+}
+```
+
+The correlator reports unknown, duplicate, and missing ids before returning a partial result. It delegates each envelope to `Method::decode_response`, so single-response and batch-response validation share the same JSON-RPC rules.
 
 When a transport returns a JSON value, the same method can validate the response envelope without performing I/O:
 
