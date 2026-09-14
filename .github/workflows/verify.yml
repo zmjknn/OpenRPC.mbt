@@ -1,0 +1,23 @@
+name: verify
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  moonbit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install MoonBit
+        shell: bash
+        run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+      - name: Add MoonBit to PATH
+        run: echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Format check
+        run: moon fmt --check
+      - name: Run tests
+        run: moon test --target wasm-gc
