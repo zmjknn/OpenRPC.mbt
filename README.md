@@ -13,6 +13,8 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Supports deterministic lookup with `Document::find_method`.
 - Builds a JSON-RPC 2.0 request from a parsed method with the caller's request id and named parameters.
 - Rejects missing required parameters and names that are not declared by the method before a request is sent.
+- Decodes a JSON-RPC 2.0 response for an expected request id into a raw result or structured error.
+- Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
 
 ## Small example
@@ -45,9 +47,25 @@ let request = method_value.build_request(7, params)
 
 The result is a JSON-RPC 2.0 envelope with an object-valued `params` field. This milestone intentionally accepts named parameters only; positional encoding, schema-value validation, and transport dispatch remain separate concerns.
 
+When a transport returns a JSON value, the same method can validate the response envelope without performing I/O:
+
+```moonbit
+match method_value.decode_response(response, 7) {
+  Ok(@openrpc.RpcResponse::Result(value)) => println(value.stringify())
+  Ok(@openrpc.RpcResponse::Error(error_value)) => println(error_value.message)
+  Err(diagnostics) => {
+    for diagnostic in diagnostics {
+      println(diagnostic.path + ": " + diagnostic.message)
+    }
+  }
+}
+```
+
+The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and preserves result/error payloads as JSON. It does not evaluate the method's opaque schema.
+
 ## Deliberate boundary
 
-The current milestone stabilizes the document model, diagnostics, and a transport-free request boundary before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, positional parameter encoding, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model, diagnostics, and transport-free request/response boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, positional parameter encoding, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 
