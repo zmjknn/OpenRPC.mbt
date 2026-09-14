@@ -16,6 +16,7 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Rejects missing required parameters and names that are not declared by the method before a request is sent.
 - Rejects missing required positional parameters and excess positional values while allowing omitted trailing optional parameters.
 - Builds named or positional JSON-RPC notifications that omit `id` and reuse the same contract checks.
+- Builds contract-aware JSON-RPC batches from named or positional calls, checking method names and unique request ids.
 - Decodes a JSON-RPC 2.0 response for an expected request id into a raw result or structured error.
 - Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
@@ -63,6 +64,21 @@ For one-way calls, use a notification builder; it intentionally emits no `id` an
 let notification = method_value.build_notification({"scope": "all"})
 ```
 
+For several response-bearing calls, let the document resolve each method and compose one batch:
+
+```moonbit
+let calls : Array[@openrpc.BatchCall] = [
+  @openrpc.BatchCall::new(
+    1,
+    "inventory.get",
+    @openrpc.RequestParams::named({"id": "abc"}),
+  ),
+]
+let batch = document.build_batch(calls)
+```
+
+Batch diagnostics include the failing call index, and duplicate request ids are rejected before the JSON array is emitted. Notifications remain a separate API because they do not participate in response matching.
+
 When a transport returns a JSON value, the same method can validate the response envelope without performing I/O:
 
 ```moonbit
@@ -81,7 +97,7 @@ The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and pres
 
 ## Deliberate boundary
 
-The current milestone stabilizes the document model, diagnostics, and transport-free request/response/notification boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model, diagnostics, and transport-free request/response/notification/batch boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 
