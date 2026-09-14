@@ -74,3 +74,16 @@ test "rejects a non-object document" {
     Ok(_) => fail("an array is not an OpenRPC document")
   }
 }
+
+test "finds a method by its contract name" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  match document.method("inventory.get") {
+    Some(method) => assert_eq(method.name, "inventory.get")
+    None => fail("the parsed method should be discoverable by name")
+  }
+}
