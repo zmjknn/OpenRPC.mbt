@@ -19,6 +19,8 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Builds contract-aware JSON-RPC batches from named or positional calls, checking method names and unique request ids.
 - Decodes a JSON-RPC 2.0 response for an expected request id into a raw result or structured error.
 - Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
+- Provides a pure, portable JSON Schema subset validator for boolean schemas, primitive `type`, `enum`, `const`, object properties, arrays, string and numeric bounds, and `allOf`/`anyOf`/`oneOf`/`not` composition.
+- Exposes opt-in `Parameter::validate`, `Method::validate_named_params`, `Method::validate_positional_params`, `Method::validate_result`, and `ResultDescriptor::validate` helpers with stable JSON-style paths.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
 
 ## Small example
@@ -57,6 +59,18 @@ let request = method_value.build_positional_request(7, values)
 ```
 
 Positional values are a prefix of the declared list, so only trailing optional parameters may be omitted. Schema-value validation and transport dispatch remain separate concerns.
+
+Schema validation is explicit when an application wants a contract check at its boundary:
+
+```moonbit
+let params : Map[String, Json] = {"id": "abc"}
+match method_value.validate_named_params(params) {
+  Ok(_) => println("parameters satisfy the OpenRPC schemas")
+  Err(diagnostics) => println(diagnostics[0].path + ": " + diagnostics[0].message)
+}
+```
+
+The validator intentionally covers a documented portable subset. It does not resolve `$ref`, load external schemas, evaluate regular-expression `pattern` or `format`, coerce values, or apply defaults. Request builders remain schema-agnostic unless one of the opt-in validation helpers is called.
 
 For one-way calls, use a notification builder; it intentionally emits no `id` and therefore has no response to decode:
 
@@ -97,7 +111,7 @@ The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and pres
 
 ## Deliberate boundary
 
-The current milestone stabilizes the document model, diagnostics, and transport-free request/response/notification/batch boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model, diagnostics, transport-free request/response/notification/batch boundaries, and a small schema-validation kernel before adding code generation. The expansion roadmap in `docs/roadmap-4000-lines.md` records the next independent contract features and the line-count accounting rule (generated `_build` output is excluded). Transport, `$ref` loading from the network, code generation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 

@@ -45,6 +45,8 @@ pub enum DiagnosticCode {
   EmptyBatch
   UnknownMethod
   DuplicateRequestId
+  SchemaViolation
+  UnsupportedSchema
   InvalidResponse
   ResponseIdMismatch
   InvalidRpcError
@@ -252,6 +254,93 @@ pub fn Method::build_positional_notification(
         "method": self.name,
         "params": Json::array(values),
       })
+  }
+}
+
+///|
+/// Validate one value against this parameter's declared schema.
+///
+/// Validation is explicit and opt-in. Request builders intentionally keep
+/// their schema-agnostic behavior so callers can choose when validation is
+/// appropriate for their transport or trust boundary.
+pub fn Parameter::validate(
+  self : Parameter,
+  value : Json,
+) -> Result[Unit, Array[Diagnostic]] {
+  validate_schema_at(value, self.schema, "$.params." + self.name)
+}
+
+///|
+/// Validate a result value against its declared schema.
+pub fn ResultDescriptor::validate(
+  self : ResultDescriptor,
+  value : Json,
+) -> Result[Unit, Array[Diagnostic]] {
+  validate_schema_at(value, self.schema, "$.result")
+}
+
+///|
+/// Validate named parameters against declarations and their schemas.
+pub fn Method::validate_named_params(
+  self : Method,
+  params : Map[String, Json],
+) -> Result[Unit, Array[Diagnostic]] {
+  match validate_named_params(self.params, params, "$") {
+    Err(diagnostics) => return Err(diagnostics)
+    Ok(_) => ()
+  }
+  for parameter in self.params {
+    match params.get(parameter.name) {
+      None => ()
+      Some(value) =>
+        match
+          validate_schema_at(
+            value,
+            parameter.schema,
+            "$.params." + parameter.name,
+          ) {
+          Ok(_) => ()
+          Err(diagnostics) => return Err(diagnostics)
+        }
+    }
+  }
+  Ok(())
+}
+
+///|
+/// Validate positional parameters against declarations and their schemas.
+pub fn Method::validate_positional_params(
+  self : Method,
+  values : Array[Json],
+) -> Result[Unit, Array[Diagnostic]] {
+  match validate_positional_params(self.params, values, "$") {
+    Err(diagnostics) => return Err(diagnostics)
+    Ok(_) => ()
+  }
+  for index, value in values {
+    let parameter = self.params[index]
+    match
+      validate_schema_at(
+        value,
+        parameter.schema,
+        "$.params[" + index.to_string() + "]",
+      ) {
+      Ok(_) => ()
+      Err(diagnostics) => return Err(diagnostics)
+    }
+  }
+  Ok(())
+}
+
+///|
+/// Validate a result value when this method declares a result schema.
+pub fn Method::validate_result(
+  self : Method,
+  value : Json,
+) -> Result[Unit, Array[Diagnostic]] {
+  match self.result {
+    None => Ok(())
+    Some(result) => result.validate(value)
   }
 }
 
