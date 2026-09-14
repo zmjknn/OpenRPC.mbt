@@ -1,7 +1,3 @@
 import {
   "moonbitlang/core/json" @json,
 }
-
-import {
-  "moonbitlang/core/test",
-} for "test"
