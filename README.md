@@ -22,6 +22,7 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
 - Provides a pure, portable JSON Schema subset validator for boolean schemas, primitive `type`, `enum`, `const`, object properties, arrays, string and numeric bounds, and `allOf`/`anyOf`/`oneOf`/`not` composition.
 - Exposes opt-in `Parameter::validate`, `Method::validate_named_params`, `Method::validate_positional_params`, `Method::validate_result`, and `ResultDescriptor::validate` helpers with stable JSON-style paths.
+- Lints parsed contracts for empty names, duplicate parameters, ambiguous positional ordering, malformed or contradictory schema boundaries, and invalid nested composition.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
 
 ## Small example
@@ -72,6 +73,17 @@ match method_value.validate_named_params(params) {
 ```
 
 The validator intentionally covers a documented portable subset. It does not resolve `$ref`, load external schemas, evaluate regular-expression `pattern` or `format`, coerce values, or apply defaults. Request builders remain schema-agnostic unless one of the opt-in validation helpers is called.
+
+Run the semantic pass after parsing when a document is being published or registered:
+
+```moonbit
+let diagnostics = document.lint()
+for diagnostic in diagnostics {
+  println(diagnostic.path + ": " + diagnostic.message)
+}
+```
+
+Linting is deterministic and non-mutating. It catches duplicate parameter names, a required positional parameter after an optional one, empty declaration names, and contradictory or malformed bounds below nested `properties`, `items`, and composition schemas.
 
 For one-way calls, use a notification builder; it intentionally emits no `id` and therefore has no response to decode:
 
