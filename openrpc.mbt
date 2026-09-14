@@ -41,6 +41,9 @@ pub enum DiagnosticCode {
   DuplicateMethod
   MissingParameter
   UnknownParameter
+  InvalidResponse
+  ResponseIdMismatch
+  InvalidRpcError
 }
 
 ///|
@@ -48,6 +51,19 @@ pub struct Diagnostic {
   path : String
   code : DiagnosticCode
   message : String
+}
+
+///|
+pub struct RpcError {
+  code : Int
+  message : String
+  data : Json?
+}
+
+///|
+pub enum RpcResponse {
+  Result(Json)
+  Error(RpcError)
 }
 
 ///|
@@ -109,6 +125,128 @@ pub fn Method::build_request(
     "method": self.name,
     "params": Json::object(params),
   })
+}
+
+///|
+pub fn Method::decode_response(
+  _self : Method,
+  response : Json,
+  request_id : Json,
+) -> Result[RpcResponse, Array[Diagnostic]] {
+  guard response is Object(response_object) else {
+    return Err([
+      diagnostic("$", InvalidResponse, "JSON-RPC response must be an object"),
+    ])
+  }
+  match response_object.get("jsonrpc") {
+    Some(String("2.0")) => ()
+    Some(_) | None =>
+      return Err([
+        diagnostic(
+          "$.jsonrpc",
+          InvalidResponse,
+          "response jsonrpc must be the string 2.0",
+        ),
+      ])
+  }
+  let response_id = match response_object.get("id") {
+    Some(value) => value
+    None =>
+      return Err([
+        diagnostic("$.id", InvalidResponse, "response id is required"),
+      ])
+  }
+  if !Json::equal(response_id, request_id) {
+    return Err([
+      diagnostic(
+        "$.id",
+        ResponseIdMismatch,
+        "response id does not match the request id",
+      ),
+    ])
+  }
+  let result = response_object.get("result")
+  let error = response_object.get("error")
+  if result is Some(_) && error is Some(_) {
+    return Err([
+      diagnostic(
+        "$",
+        InvalidResponse,
+        "response must contain either result or error, not both",
+      ),
+    ])
+  }
+  match result {
+    Some(value) => return Ok(RpcResponse::Result(value))
+    None => ()
+  }
+  match error {
+    Some(value) => decode_rpc_error(value)
+    None =>
+      Err([
+        diagnostic(
+          "$",
+          InvalidResponse,
+          "response must contain a result or error",
+        ),
+      ])
+  }
+}
+
+///|
+fn decode_rpc_error(value : Json) -> Result[RpcResponse, Array[Diagnostic]] {
+  guard value is Object(error_object) else {
+    return Err([
+      diagnostic("$.error", InvalidRpcError, "error must be an object"),
+    ])
+  }
+  let code = match error_object.get("code") {
+    Some(Number(number, ..)) => {
+      let integer = number.to_int()
+      if integer.to_double() != number {
+        return Err([
+          diagnostic(
+            "$.error.code",
+            InvalidRpcError,
+            "error code must be an integer",
+          ),
+        ])
+      }
+      integer
+    }
+    Some(_) =>
+      return Err([
+        diagnostic(
+          "$.error.code",
+          InvalidRpcError,
+          "error code must be a number",
+        ),
+      ])
+    None =>
+      return Err([
+        diagnostic("$.error.code", InvalidRpcError, "error code is required"),
+      ])
+  }
+  let message = match error_object.get("message") {
+    Some(String(value)) => value
+    Some(_) =>
+      return Err([
+        diagnostic(
+          "$.error.message",
+          InvalidRpcError,
+          "error message must be a string",
+        ),
+      ])
+    None =>
+      return Err([
+        diagnostic(
+          "$.error.message",
+          InvalidRpcError,
+          "error message is required",
+        ),
+      ])
+  }
+  Ok(RpcResponse::Error({ code, message, data: error_object.get("data"), }))
 }
 
 ///|

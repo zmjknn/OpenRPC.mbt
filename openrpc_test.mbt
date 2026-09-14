@@ -242,3 +242,244 @@ test "builds an empty params object for parameterless methods" {
     Err(_) => fail("parameterless methods should accept an empty params object")
   }
 }
+
+///|
+test "decodes a successful response for its request id" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":7,"result":{"items":[]}}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Ok(RpcResponse::Result(value)) => assert_true(value is Object(_))
+    Ok(_) => fail("a result response should decode as a result")
+    Err(_) => fail("a valid response should be accepted")
+  }
+}
+
+///|
+test "decodes a structured JSON-RPC error" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":"request-1","error":{"code":-32001,"message":"not found","data":{"retry":true}}}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, "request-1") {
+    Ok(RpcResponse::Error(error_value)) => {
+      assert_eq(error_value.code, -32001)
+      assert_eq(error_value.message, "not found")
+      match error_value.data {
+        Some(data) => assert_true(data is Object(_))
+        None => fail("error data should be preserved")
+      }
+    }
+    Ok(_) => fail("an error response should decode as an error")
+    Err(_) => fail("a valid error response should be accepted")
+  }
+}
+
+///|
+test "rejects a response for a different request id" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":8,"result":true}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.id")
+      assert_true(diagnostics[0].code is ResponseIdMismatch)
+    }
+    Ok(_) => fail("a response for another request must be rejected")
+  }
+}
+
+///|
+test "rejects a response without result or error" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":7}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$")
+      assert_true(diagnostics[0].code is InvalidResponse)
+    }
+    Ok(_) => fail("an empty response envelope must be rejected")
+  }
+}
+
+///|
+test "rejects a response containing both result and error" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":7,"result":true,"error":{"code":-1,"message":"bad"}}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$")
+      assert_true(diagnostics[0].code is InvalidResponse)
+    }
+    Ok(_) => fail("result and error cannot appear together")
+  }
+}
+
+///|
+test "rejects a non-integer JSON-RPC error code" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":7,"error":{"code":-32000.5,"message":"bad"}}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.error.code")
+      assert_true(diagnostics[0].code is InvalidRpcError)
+    }
+    Ok(_) => fail("a fractional error code must be rejected")
+  }
+}
+
+///|
+test "rejects an error without a string message" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":7,"error":{"code":-32000,"message":true}}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.error.message")
+      assert_true(diagnostics[0].code is InvalidRpcError)
+    }
+    Ok(_) => fail("an error message must be a string")
+  }
+}
+
+///|
+test "rejects a response with the wrong JSON-RPC version" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"1.0","id":7,"result":true}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.jsonrpc")
+      assert_true(diagnostics[0].code is InvalidResponse)
+    }
+    Ok(_) => fail("only JSON-RPC 2.0 responses should be accepted")
+  }
+}
+
+///|
+test "preserves a null success result" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response_source =
+    #|{"jsonrpc":"2.0","id":7,"result":null}
+  let response = @json.parse(response_source) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Ok(RpcResponse::Result(value)) => assert_true(value is Null)
+    Ok(_) => fail("a null result should still be a result")
+    Err(_) => fail("a null result is valid JSON-RPC data")
+  }
+}
