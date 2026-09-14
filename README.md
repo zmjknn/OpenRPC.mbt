@@ -15,6 +15,7 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Builds a positional JSON-RPC 2.0 request from the method's declared parameter order.
 - Rejects missing required parameters and names that are not declared by the method before a request is sent.
 - Rejects missing required positional parameters and excess positional values while allowing omitted trailing optional parameters.
+- Builds named or positional JSON-RPC notifications that omit `id` and reuse the same contract checks.
 - Decodes a JSON-RPC 2.0 response for an expected request id into a raw result or structured error.
 - Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
@@ -56,6 +57,12 @@ let request = method_value.build_positional_request(7, values)
 
 Positional values are a prefix of the declared list, so only trailing optional parameters may be omitted. Schema-value validation and transport dispatch remain separate concerns.
 
+For one-way calls, use a notification builder; it intentionally emits no `id` and therefore has no response to decode:
+
+```moonbit
+let notification = method_value.build_notification({"scope": "all"})
+```
+
 When a transport returns a JSON value, the same method can validate the response envelope without performing I/O:
 
 ```moonbit
@@ -74,7 +81,7 @@ The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and pres
 
 ## Deliberate boundary
 
-The current milestone stabilizes the document model, diagnostics, and transport-free request/response boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model, diagnostics, and transport-free request/response/notification boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 

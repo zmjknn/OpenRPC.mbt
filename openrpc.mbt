@@ -91,7 +91,74 @@ pub fn Method::build_request(
   id : Json,
   params : Map[String, Json],
 ) -> Result[Json, Array[Diagnostic]] {
-  for parameter in self.params {
+  match validate_named_params(self.params, params) {
+    Err(diagnostics) => Err(diagnostics)
+    Ok(_) =>
+      Ok({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": self.name,
+        "params": Json::object(params),
+      })
+  }
+}
+
+///|
+pub fn Method::build_notification(
+  self : Method,
+  params : Map[String, Json],
+) -> Result[Json, Array[Diagnostic]] {
+  match validate_named_params(self.params, params) {
+    Err(diagnostics) => Err(diagnostics)
+    Ok(_) =>
+      Ok({
+        "jsonrpc": "2.0",
+        "method": self.name,
+        "params": Json::object(params),
+      })
+  }
+}
+
+///|
+pub fn Method::build_positional_request(
+  self : Method,
+  id : Json,
+  values : Array[Json],
+) -> Result[Json, Array[Diagnostic]] {
+  match validate_positional_params(self.params, values) {
+    Err(diagnostics) => Err(diagnostics)
+    Ok(_) =>
+      Ok({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": self.name,
+        "params": Json::array(values),
+      })
+  }
+}
+
+///|
+pub fn Method::build_positional_notification(
+  self : Method,
+  values : Array[Json],
+) -> Result[Json, Array[Diagnostic]] {
+  match validate_positional_params(self.params, values) {
+    Err(diagnostics) => Err(diagnostics)
+    Ok(_) =>
+      Ok({
+        "jsonrpc": "2.0",
+        "method": self.name,
+        "params": Json::array(values),
+      })
+  }
+}
+
+///|
+fn validate_named_params(
+  declarations : Array[Parameter],
+  params : Map[String, Json],
+) -> Result[Unit, Array[Diagnostic]] {
+  for parameter in declarations {
     if parameter.required && params.get(parameter.name) is None {
       return Err([
         diagnostic(
@@ -104,7 +171,7 @@ pub fn Method::build_request(
   }
   for name, _value in params {
     let mut declared = false
-    for parameter in self.params {
+    for parameter in declarations {
       if parameter.name == name {
         declared = true
         break
@@ -120,21 +187,15 @@ pub fn Method::build_request(
       ])
     }
   }
-  Ok({
-    "jsonrpc": "2.0",
-    "id": id,
-    "method": self.name,
-    "params": Json::object(params),
-  })
+  Ok(())
 }
 
 ///|
-pub fn Method::build_positional_request(
-  self : Method,
-  id : Json,
+fn validate_positional_params(
+  declarations : Array[Parameter],
   values : Array[Json],
-) -> Result[Json, Array[Diagnostic]] {
-  if values.length() > self.params.length() {
+) -> Result[Unit, Array[Diagnostic]] {
+  if values.length() > declarations.length() {
     return Err([
       diagnostic(
         "$.params",
@@ -143,7 +204,7 @@ pub fn Method::build_positional_request(
       ),
     ])
   }
-  for index, parameter in self.params {
+  for index, parameter in declarations {
     if index >= values.length() && parameter.required {
       return Err([
         diagnostic(
@@ -154,12 +215,7 @@ pub fn Method::build_positional_request(
       ])
     }
   }
-  Ok({
-    "jsonrpc": "2.0",
-    "id": id,
-    "method": self.name,
-    "params": Json::array(values),
-  })
+  Ok(())
 }
 
 ///|
