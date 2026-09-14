@@ -242,3 +242,29 @@ test "builds an empty params object for parameterless methods" {
     Err(_) => fail("parameterless methods should accept an empty params object")
   }
 }
+
+///|
+test "decodes a successful response for its request id" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let response = @json.parse(
+    (
+      #|{"jsonrpc":"2.0","id":7,"result":{"items":[]}},
+    ),
+  ) catch {
+    _ => fail("the response fixture should be valid JSON")
+  }
+  match method_value.decode_response(response, 7) {
+    Ok(RpcResponse::Result(value)) => assert_true(value is Object(_))
+    Ok(_) => fail("a result response should decode as a result")
+    Err(_) => fail("a valid response should be accepted")
+  }
+}
