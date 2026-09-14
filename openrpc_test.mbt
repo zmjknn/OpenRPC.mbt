@@ -74,3 +74,71 @@ test "rejects a non-object document" {
     Ok(_) => fail("an array is not an OpenRPC document")
   }
 }
+
+///|
+test "finds a method by its contract name" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  match document.find_method("inventory.get") {
+    Some(method_value) => assert_eq(method_value.name, "inventory.get")
+    None => fail("the parsed method should be discoverable by name")
+  }
+}
+
+///|
+test "keeps ordered parameters and an optional result schema" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"verbose","schema":{"type":"boolean"}}],"result":{"name":"item","schema":{"type":"object"}}}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  assert_eq(method_value.params.length(), 2)
+  assert_eq(method_value.params[0].name, "id")
+  assert_true(method_value.params[0].required)
+  assert_false(method_value.params[1].required)
+  assert_true(method_value.params[0].schema is Object(_))
+  match method_value.result {
+    Some(result_value) => {
+      assert_eq(result_value.name, "item")
+      assert_true(result_value.schema is Object(_))
+    }
+    None => fail("the result descriptor should be present")
+  }
+}
+
+///|
+test "rejects duplicate method names" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"},{"name":"inventory.get"}]}
+  match Document::parse(source) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.methods[1].name")
+      assert_true(diagnostics[0].code is DuplicateMethod)
+    }
+    Ok(_) => fail("duplicate method names should be rejected")
+  }
+}
+
+///|
+test "rejects a parameter without a schema" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id"}]}]}
+  match Document::parse(source) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.methods[0].params[0].schema")
+      assert_true(diagnostics[0].code is MissingField)
+    }
+    Ok(_) => fail("a parameter without a schema should be rejected")
+  }
+}

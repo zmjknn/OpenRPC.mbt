@@ -5,8 +5,23 @@ pub struct Info {
 }
 
 ///|
+pub struct Parameter {
+  name : String
+  required : Bool
+  schema : Json
+}
+
+///|
+pub struct ResultDescriptor {
+  name : String
+  schema : Json
+}
+
+///|
 pub struct Method {
   name : String
+  params : Array[Parameter]
+  result : ResultDescriptor?
 }
 
 ///|
@@ -23,6 +38,7 @@ pub enum DiagnosticCode {
   MissingField
   InvalidField
   UnsupportedVersion
+  DuplicateMethod
 }
 
 ///|
@@ -38,6 +54,16 @@ pub fn Document::parse(source : String) -> Result[Document, Array[Diagnostic]] {
     _ => return Err([diagnostic("$", InvalidJson, "source is not valid JSON")])
   }
   parse_document(value)
+}
+
+///|
+pub fn Document::find_method(self : Document, name : String) -> Method? {
+  for method_value in self.methods {
+    if method_value.name == name {
+      return Some(method_value)
+    }
+  }
+  None
 }
 
 ///|
@@ -130,6 +156,7 @@ fn parse_methods(
   values : Array[Json],
 ) -> Result[Array[Method], Array[Diagnostic]] {
   let methods : Array[Method] = []
+  let names : Map[String, Bool] = Map([])
   for index, value in values {
     let method_path = "$.methods[" + index.to_string() + "]"
     guard value is Object(method_object) else {
@@ -156,9 +183,154 @@ fn parse_methods(
           ),
         ])
     }
-    methods.push({ name, })
+    if names.get(name) is Some(_) {
+      return Err([
+        diagnostic(
+          method_path + ".name",
+          DuplicateMethod,
+          "method names must be unique",
+        ),
+      ])
+    }
+    names[name] = true
+    let params = match method_object.get("params") {
+      None => []
+      Some(Array(values)) =>
+        match parse_parameters(values, method_path) {
+          Ok(value) => value
+          Err(diagnostics) => return Err(diagnostics)
+        }
+      Some(_) =>
+        return Err([
+          diagnostic(
+            method_path + ".params",
+            InvalidField,
+            "params must be an array",
+          ),
+        ])
+    }
+    let result = match method_object.get("result") {
+      None => None
+      Some(Object(value)) =>
+        match parse_result(value, method_path) {
+          Ok(value) => Some(value)
+          Err(diagnostics) => return Err(diagnostics)
+        }
+      Some(_) =>
+        return Err([
+          diagnostic(
+            method_path + ".result",
+            InvalidField,
+            "result must be an object",
+          ),
+        ])
+    }
+    methods.push({ name, params, result, })
   }
   Ok(methods)
+}
+
+///|
+fn parse_parameters(
+  values : Array[Json],
+  method_path : String,
+) -> Result[Array[Parameter], Array[Diagnostic]] {
+  let params : Array[Parameter] = []
+  for index, value in values {
+    let param_path = method_path + ".params[" + index.to_string() + "]"
+    guard value is Object(parameter_object) else {
+      return Err([
+        diagnostic(
+          param_path,
+          ExpectedObject,
+          "each parameter must be an object",
+        ),
+      ])
+    }
+    let name = match parameter_object.get("name") {
+      Some(String(value)) => value
+      Some(_) =>
+        return Err([
+          diagnostic(
+            param_path + ".name",
+            InvalidField,
+            "parameter name must be a string",
+          ),
+        ])
+      None =>
+        return Err([
+          diagnostic(
+            param_path + ".name",
+            MissingField,
+            "required field is missing",
+          ),
+        ])
+    }
+    let required = match parameter_object.get("required") {
+      None => false
+      Some(True) => true
+      Some(False) => false
+      Some(_) =>
+        return Err([
+          diagnostic(
+            param_path + ".required",
+            InvalidField,
+            "required must be a boolean",
+          ),
+        ])
+    }
+    let schema = match parameter_object.get("schema") {
+      Some(value) => value
+      None =>
+        return Err([
+          diagnostic(
+            param_path + ".schema",
+            MissingField,
+            "required field is missing",
+          ),
+        ])
+    }
+    params.push({ name, required, schema, })
+  }
+  Ok(params)
+}
+
+///|
+fn parse_result(
+  value : Map[String, Json],
+  method_path : String,
+) -> Result[ResultDescriptor, Array[Diagnostic]] {
+  let name = match value.get("name") {
+    Some(String(value)) => value
+    Some(_) =>
+      return Err([
+        diagnostic(
+          method_path + ".result.name",
+          InvalidField,
+          "result name must be a string",
+        ),
+      ])
+    None =>
+      return Err([
+        diagnostic(
+          method_path + ".result.name",
+          MissingField,
+          "required field is missing",
+        ),
+      ])
+  }
+  let schema = match value.get("schema") {
+    Some(value) => value
+    None =>
+      return Err([
+        diagnostic(
+          method_path + ".result.schema",
+          MissingField,
+          "required field is missing",
+        ),
+      ])
+  }
+  Ok({ name, schema, })
 }
 
 ///|
