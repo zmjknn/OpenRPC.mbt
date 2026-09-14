@@ -12,7 +12,9 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 - Rejects duplicate method names and reports invalid JSON, missing fields, wrong field types, and non-object methods with JSON-style paths.
 - Supports deterministic lookup with `Document::find_method`.
 - Builds a JSON-RPC 2.0 request from a parsed method with the caller's request id and named parameters.
+- Builds a positional JSON-RPC 2.0 request from the method's declared parameter order.
 - Rejects missing required parameters and names that are not declared by the method before a request is sent.
+- Rejects missing required positional parameters and excess positional values while allowing omitted trailing optional parameters.
 - Decodes a JSON-RPC 2.0 response for an expected request id into a raw result or structured error.
 - Rejects malformed response envelopes, mismatched ids, and invalid error objects with JSON-style diagnostics.
 - Keeps the result embeddable on MoonBit targets; there is no native-only file or network dependency.
@@ -45,7 +47,14 @@ let params : Map[String, Json] = {"id": "abc"}
 let request = method_value.build_request(7, params)
 ```
 
-The result is a JSON-RPC 2.0 envelope with an object-valued `params` field. This milestone intentionally accepts named parameters only; positional encoding, schema-value validation, and transport dispatch remain separate concerns.
+The result is a JSON-RPC 2.0 envelope with an object-valued `params` field. When a server expects positional parameters, the ordered contract can be used directly:
+
+```moonbit
+let values : Array[Json] = ["abc"]
+let request = method_value.build_positional_request(7, values)
+```
+
+Positional values are a prefix of the declared list, so only trailing optional parameters may be omitted. Schema-value validation and transport dispatch remain separate concerns.
 
 When a transport returns a JSON value, the same method can validate the response envelope without performing I/O:
 
@@ -65,7 +74,7 @@ The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and pres
 
 ## Deliberate boundary
 
-The current milestone stabilizes the document model, diagnostics, and transport-free request/response boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, positional parameter encoding, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The current milestone stabilizes the document model, diagnostics, and transport-free request/response boundaries before adding code generation. Schema values are kept as JSON instead of pretending to be a complete JSON Schema engine. Transport, `$ref` loading from the network, result-schema evaluation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
 
 ## Development
 
