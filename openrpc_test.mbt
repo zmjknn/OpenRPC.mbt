@@ -1,3 +1,4 @@
+///|
 test "decodes the minimum OpenRPC document" {
   let source =
     #|{
@@ -16,6 +17,7 @@ test "decodes the minimum OpenRPC document" {
   }
 }
 
+///|
 test "reports the path for an unsupported OpenRPC version" {
   let source =
     #|{"openrpc":"2.0.0","info":{"title":"x","version":"1"},"methods":[]}
@@ -30,8 +32,10 @@ test "reports the path for an unsupported OpenRPC version" {
   }
 }
 
+///|
 test "reports a missing required field" {
-  let source = #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"}}
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"}}
   let result = Document::parse(source)
   match result {
     Err(diagnostics) => {
@@ -43,6 +47,7 @@ test "reports a missing required field" {
   }
 }
 
+///|
 test "reports the indexed path for an invalid method" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{}]}
@@ -57,6 +62,7 @@ test "reports the indexed path for an invalid method" {
   }
 }
 
+///|
 test "rejects a non-object document" {
   let result = Document::parse("[]")
   match result {
