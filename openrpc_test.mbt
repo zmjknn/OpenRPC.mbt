@@ -509,3 +509,74 @@ test "builds a positional JSON-RPC request in contract order" {
     Err(_) => fail("a complete positional request should be constructed")
   }
 }
+
+///|
+test "allows omitted trailing optional positional parameters" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"verbose","schema":{"type":"boolean"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let values : Array[Json] = ["abc"]
+  match method_value.build_positional_request(9, values) {
+    Ok(request) => {
+      guard request is { "params": Array(encoded), .. } else {
+        fail("request should include an array params value")
+      }
+      assert_eq(encoded.length(), 1)
+      assert_eq(encoded[0], Json::string("abc"))
+    }
+    Err(_) => fail("a trailing optional parameter may be omitted")
+  }
+}
+
+///|
+test "rejects a positional request that omits a required parameter" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.get") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let values : Array[Json] = []
+  match method_value.build_positional_request(9, values) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.params[0]")
+      assert_true(diagnostics[0].code is MissingParameter)
+    }
+    Ok(_) => fail("a required positional parameter should not be omitted")
+  }
+}
+
+///|
+test "rejects more positional values than the method declares" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.list") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let values : Array[Json] = [true]
+  match method_value.build_positional_request(9, values) {
+    Err(diagnostics) => {
+      assert_eq(diagnostics.length(), 1)
+      assert_eq(diagnostics[0].path, "$.params")
+      assert_true(diagnostics[0].code is TooManyParameters)
+    }
+    Ok(_) => fail("extra positional parameters should be rejected")
+  }
+}
