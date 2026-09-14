@@ -41,6 +41,7 @@ pub enum DiagnosticCode {
   DuplicateMethod
   MissingParameter
   UnknownParameter
+  TooManyParameters
   InvalidResponse
   ResponseIdMismatch
   InvalidRpcError
@@ -124,6 +125,40 @@ pub fn Method::build_request(
     "id": id,
     "method": self.name,
     "params": Json::object(params),
+  })
+}
+
+///|
+pub fn Method::build_positional_request(
+  self : Method,
+  id : Json,
+  values : Array[Json],
+) -> Result[Json, Array[Diagnostic]] {
+  if values.length() > self.params.length() {
+    return Err([
+      diagnostic(
+        "$.params",
+        TooManyParameters,
+        "too many positional parameters were provided",
+      ),
+    ])
+  }
+  for index, parameter in self.params {
+    if index >= values.length() && parameter.required {
+      return Err([
+        diagnostic(
+          "$.params[" + index.to_string() + "]",
+          MissingParameter,
+          "required parameter is missing",
+        ),
+      ])
+    }
+  }
+  Ok({
+    "jsonrpc": "2.0",
+    "id": id,
+    "method": self.name,
+    "params": Json::array(values),
   })
 }
 
