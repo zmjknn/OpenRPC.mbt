@@ -580,3 +580,30 @@ test "rejects more positional values than the method declares" {
     Ok(_) => fail("extra positional parameters should be rejected")
   }
 }
+
+///|
+test "builds a named JSON-RPC notification without an id" {
+  let source =
+    #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}}]}]}
+  let document = match Document::parse(source) {
+    Ok(document) => document
+    Err(_) => fail("the fixture should be valid")
+  }
+  let method_value = match document.find_method("inventory.refresh") {
+    Some(method_value) => method_value
+    None => fail("the method should be present")
+  }
+  let params : Map[String, Json] = { "scope": "all" }
+  match method_value.build_notification(params) {
+    Ok(notification) => {
+      guard notification is Object(fields) else {
+        fail("notification should be a JSON object")
+      }
+      assert_eq(fields.get("jsonrpc"), Some(Json::string("2.0")))
+      assert_eq(fields.get("method"), Some(Json::string("inventory.refresh")))
+      assert_true(fields.get("params") is Some(Object(_)))
+      assert_true(fields.get("id") is None)
+    }
+    Err(_) => fail("a complete notification should be constructed")
+  }
+}
