@@ -48,6 +48,10 @@ pub enum DiagnosticCode {
   SchemaViolation
   UnsupportedSchema
   InvalidResponse
+  InvalidBatchResponse
+  UnknownResponseId
+  DuplicateResponseId
+  MissingResponse
   ResponseIdMismatch
   InvalidRpcError
 }
@@ -70,6 +74,14 @@ pub struct RpcError {
 pub enum RpcResponse {
   Result(Json)
   Error(RpcError)
+}
+
+///|
+/// A response correlated with one of the calls in a JSON-RPC batch.
+pub struct BatchResponse {
+  id : Json
+  method_name : String
+  response : RpcResponse
 }
 
 ///|
@@ -475,6 +487,150 @@ pub fn Method::decode_response(
         ),
       ])
   }
+}
+
+///|
+/// Decode and correlate a JSON-RPC batch response with its original calls.
+///
+/// Servers may return responses in any order. The returned array is reordered
+/// to match `calls`, making downstream result handling deterministic while
+/// preserving each method name and structured error payload.
+pub fn Document::decode_batch_response(
+  self : Document,
+  response : Json,
+  calls : Array[BatchCall],
+) -> Result[Array[BatchResponse], Array[Diagnostic]] {
+  if calls.length() == 0 {
+    return Err([
+      diagnostic(
+        "$",
+        EmptyBatch,
+        "a batch response needs at least one expected call",
+      ),
+    ])
+  }
+  let response_values = match response {
+    Array(values) => values
+    _ =>
+      return Err([
+        diagnostic(
+          "$",
+          InvalidBatchResponse,
+          "a batch response must be a JSON array",
+        ),
+      ])
+  }
+  if response_values.length() == 0 {
+    return Err([
+      diagnostic(
+        "$",
+        InvalidBatchResponse,
+        "a batch response array cannot be empty",
+      ),
+    ])
+  }
+  let seen_ids : Array[Json] = []
+  let decoded : Array[BatchResponse] = []
+  for response_index, response_value in response_values {
+    guard response_value is Object(response_object) else {
+      return Err([
+        diagnostic(
+          "$[" + response_index.to_string() + "]",
+          InvalidBatchResponse,
+          "each batch response must be an object",
+        ),
+      ])
+    }
+    let response_id = match response_object.get("id") {
+      Some(value) => value
+      None =>
+        return Err([
+          diagnostic(
+            "$[" + response_index.to_string() + "].id",
+            InvalidBatchResponse,
+            "each batch response must contain an id",
+          ),
+        ])
+    }
+    for previous_id in seen_ids {
+      if Json::equal(previous_id, response_id) {
+        return Err([
+          diagnostic(
+            "$[" + response_index.to_string() + "].id",
+            DuplicateResponseId,
+            "a batch response id may occur only once",
+          ),
+        ])
+      }
+    }
+    seen_ids.push(response_id)
+    let call_index : Int? = find_batch_call_index(calls, response_id)
+    let call = match call_index {
+      Some(index) => calls[index]
+      None =>
+        return Err([
+          diagnostic(
+            "$[" + response_index.to_string() + "].id",
+            UnknownResponseId,
+            "response id is not present in the original calls",
+          ),
+        ])
+    }
+    let method_value = match self.find_method(call.method_name) {
+      Some(value) => value
+      None =>
+        return Err([
+          diagnostic(
+            "$[" + response_index.to_string() + "].method",
+            UnknownMethod,
+            "the original call method is not declared by the document",
+          ),
+        ])
+    }
+    let decoded_response = match
+      method_value.decode_response(response_value, response_id) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    decoded.push({
+      id: response_id,
+      method_name: call.method_name,
+      response: decoded_response,
+    })
+  }
+  let ordered : Array[BatchResponse] = []
+  for call_index, call in calls {
+    let mut matched : BatchResponse? = None
+    for value in decoded {
+      if Json::equal(value.id, call.id) {
+        matched = Some(value)
+        break
+      }
+    }
+    match matched {
+      Some(value) => ordered.push(value)
+      None =>
+        return Err([
+          diagnostic(
+            "$.responses[" + call_index.to_string() + "]",
+            MissingResponse,
+            "the original call has no matching response",
+          ),
+        ])
+    }
+  }
+  Ok(ordered)
+}
+
+///|
+/// Find a call by JSON structural id equality.
+fn find_batch_call_index(calls : Array[BatchCall], response_id : Json) -> Int? {
+  for index, call in calls {
+    if Json::equal(call.id, response_id) {
+      return Some(index)
+    }
+  }
+  None
 }
 
 ///|
