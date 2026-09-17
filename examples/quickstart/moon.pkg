@@ -1,0 +1,5 @@
+import {
+  "zmjknn/openrpc",
+}
+
+pkgtype(kind: "executable")
