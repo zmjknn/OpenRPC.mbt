@@ -2,6 +2,10 @@
 
 OpenRPC document modeling and validation for MoonBit.
 
+Language: **MoonBit** · License: **Apache-2.0** · Package: `zmjknn/openrpc`
+
+[![verify](https://github.com/zmjknn/OpenRPC.mbt/actions/workflows/verify.yml/badge.svg)](https://github.com/zmjknn/OpenRPC.mbt/actions/workflows/verify.yml)
+
 This project fills a narrow gap between a JSON-RPC transport and an application: a service can publish an OpenRPC document, and MoonBit code can parse it into a typed contract with diagnostics that point back to the document. It is a library first; it does not replace JSON-RPC transports or MCP runtimes.
 
 ## What works today
@@ -45,6 +49,24 @@ match @openrpc.Document::parse(source) {
   }
 }
 ```
+
+## Runnable quickstart
+
+The repository includes an executable consumer under `examples/quickstart`.
+Run it from the repository root:
+
+```text
+moon run examples/quickstart --target wasm-gc
+```
+
+Expected output:
+
+```text
+method=inventory.get, request={"jsonrpc":"2.0","id":7,"method":"inventory.get","params":{"id":"abc"}}
+```
+
+The same contract is exercised by `submission_readiness_test.mbt`, so the
+README example and the library behavior are tested together.
 
 After selecting a method, request construction stays pure and transport-agnostic:
 
@@ -137,6 +159,14 @@ match method_value.decode_response(response, 7) {
 
 The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and preserves result/error payloads as JSON. It does not evaluate the method's opaque schema.
 
+## Repository structure
+
+The implementation boundaries and package layout are documented in
+[`docs/architecture.md`](docs/architecture.md). In short, `openrpc.mbt`
+contains the document/message model, `schema.mbt` contains Schema validation,
+`lint.mbt` contains semantic checks, and `examples/quickstart` demonstrates
+consumption from a separate executable package.
+
 ## Deliberate boundary
 
 The current milestone stabilizes the document model, diagnostics, transport-free request/response/notification/batch boundaries, and a small schema-validation kernel before adding code generation. The expansion roadmap in `docs/roadmap-4000-lines.md` records the next independent contract features and the line-count accounting rule (generated `_build` output is excluded). Transport, `$ref` loading from the network, code generation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
@@ -146,8 +176,23 @@ The current milestone stabilizes the document model, diagnostics, transport-free
 The public history follows the project workflow: Issue, feature branch, failing test, implementation, regression test, pull request, CI, and merge.
 
 ```text
-moon fmt
+moon fmt --check
+moon check --target wasm-gc
+moon build --target wasm-gc
 moon test --target wasm-gc
+moon run examples/quickstart --target wasm-gc
 ```
+
+GitHub Actions runs the same format, check, build, test, and quickstart steps.
+The public development record is maintained by `zmjknn` through Issues,
+feature branches, failing tests, implementation commits, PR review, CI, and
+merge.
+
+## Mooncakes publication
+
+The module metadata and package contents are prepared for Mooncakes. The
+maintainer-controlled login and publish steps are documented in
+[`docs/mooncakes-publish.md`](docs/mooncakes-publish.md); no credential is
+stored in this repository.
 
 The repository is maintained by `zmjknn` for the MoonBit September 2026 hackathon.

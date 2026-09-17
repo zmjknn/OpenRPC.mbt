@@ -1,6 +1,6 @@
 ///|
 test "the quickstart contract parses, lints, and builds a request" {
-  let document = match Document::parse(submission_example_source()) {
+  let document = match Document::parse(quickstart_source()) {
     Ok(value) => value
     Err(_) => fail("the documented example contract should parse")
   }
@@ -17,8 +17,8 @@ test "the quickstart contract parses, lints, and builds a request" {
 
 ///|
 test "the quickstart summary names the parsed method" {
-  let summary = submission_example_summary() catch {
-    _ => fail("the quickstart summary should not raise")
+  match quickstart_summary() {
+    Ok(summary) => assert_true(summary.contains("inventory.get"))
+    Err(_) => fail("the quickstart summary should not fail")
   }
-  assert_true(summary.contains("inventory.get"))
 }
