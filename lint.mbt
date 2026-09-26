@@ -6,11 +6,60 @@
 /// context, such as positional optionality and recursive schema boundaries.
 pub fn Document::lint(self : Document) -> Array[Diagnostic] {
   let diagnostics : Array[Diagnostic] = []
+  for index, server in self.servers {
+    lint_server(server, "$.servers[" + index.to_string() + "]", diagnostics)
+  }
   for method_index, method_value in self.methods {
     let method_path = "$.methods[" + method_index.to_string() + "]"
     lint_method(method_value, method_path, diagnostics)
   }
+  for name, schema in self.components.schemas {
+    lint_schema(schema, "$.components.schemas." + name, diagnostics)
+  }
+  for reference_diagnostic in self.lint_references() {
+    diagnostics.push(reference_diagnostic)
+  }
   diagnostics
+}
+
+///|
+/// Check server URL templates and declared default values without performing I/O.
+fn lint_server(
+  server : Server,
+  path : String,
+  diagnostics : Array[Diagnostic],
+) -> Unit {
+  for name, variable in server.variables {
+    if variable.enum_values.length() > 0 {
+      let mut found_default = false
+      for allowed in variable.enum_values {
+        if allowed == variable.default_value {
+          found_default = true
+          break
+        }
+      }
+      if !found_default {
+        diagnostics.push(
+          diagnostic(
+            path + ".variables." + name + ".default",
+            InvalidServerVariableValue,
+            "server variable default must be one of its enum values",
+          ),
+        )
+      }
+    }
+  }
+  match server.render_url(Map([])) {
+    Ok(_) => ()
+    Err(server_diagnostics) =>
+      for server_diagnostic in server_diagnostics {
+        diagnostics.push({
+          path: server_diagnostic.path,
+          code: server_diagnostic.code,
+          message: server_diagnostic.message,
+        })
+      }
+  }
 }
 
 ///|
@@ -27,6 +76,13 @@ fn lint_method(
         EmptyMethodName,
         "method name must not be empty",
       ),
+    )
+  }
+  for server_index, server in method_value.servers {
+    lint_server(
+      server,
+      method_path + ".servers[" + server_index.to_string() + "]",
+      diagnostics,
     )
   }
   let mut optional_seen = false

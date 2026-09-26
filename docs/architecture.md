@@ -12,19 +12,22 @@ load remote references.
 | Path | Responsibility |
 | --- | --- |
 | `openrpc.mbt` | OpenRPC model, parser, request builders, response decoders |
+| `metadata.mbt` | Tags, servers, server variables, examples, and reusable components |
+| `references.mbt` | Local JSON Pointer resolution and document-aware schema validation |
+| `diff.mbt` | Compatibility-oriented contract change reports |
 | `schema.mbt` | Portable JSON Schema subset evaluator |
 | `lint.mbt` | Semantic contract lint pass |
 | `*_test.mbt` | Focused parser, message, schema, batch, lint, and example tests |
 | `example_contract.mbt` | Reusable quickstart fixture and summary |
 | `examples/quickstart` | Executable MoonBit consumer of the published package API |
-| `docs/plans` | Design decisions and implementation records |
 | `.github/workflows` | Reproducible format, check, build, test, and example CI |
 
 ## Data flow
 
 ```text
 OpenRPC JSON
-    -> Document::parse
+    -> Document::parse + metadata/component decoding
+    -> local JSON Pointer resolution
     -> Method lookup
     -> request / notification / batch builder
     -> transport owned by the application
@@ -32,9 +35,11 @@ OpenRPC JSON
     -> optional result-schema validation
 ```
 
-`Document::lint` is an independent pre-publication pass. It checks semantic
-problems that require the whole declaration context, while the builders stay
-schema-agnostic and reusable at runtime.
+`Document::lint` is an independent pre-publication pass. It checks schema
+boundaries, local reference targets, server templates, and declaration context.
+`Document::diff` compares two immutable parsed contracts and returns changes
+with compatibility impact. Builders remain transport-agnostic and do not
+perform schema validation unless a document-aware validation API is called.
 
 ## Portability boundary
 

@@ -58,6 +58,14 @@ test "supports boolean schemas" {
 }
 
 ///|
+test "requires document context to validate schema references" {
+  let source =
+    #|{"$ref":"#/components/schemas/Text"}
+  let schema = schema_fixture(source)
+  assert_schema_rejects(Json::string("ok"), schema, false, "$.$ref")
+}
+
+///|
 test "matches every primitive schema type" {
   let null_schema =
     #|{"type":"null"}

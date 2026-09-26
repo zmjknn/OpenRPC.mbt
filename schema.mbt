@@ -31,6 +31,12 @@ fn validate_schema_object(
   schema : Map[String, Json],
   path : String,
 ) -> Result[Unit, Array[Diagnostic]] {
+  if schema.get("$ref") is Some(_) {
+    return schema_definition_error(
+      path + ".$ref",
+      "schema references must be validated through a parsed Document",
+    )
+  }
   match validate_type_keyword(value, schema, path) {
     Err(diagnostics) => return Err(diagnostics)
     Ok(_) => ()
