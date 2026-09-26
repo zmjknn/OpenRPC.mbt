@@ -810,7 +810,11 @@ test "prefixes named parameter diagnostics with the batch index" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[@openrpc.BatchCall] = [
-    @openrpc.BatchCall::new(1, "inventory.get", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
