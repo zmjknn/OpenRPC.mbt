@@ -29,7 +29,7 @@ test "parses metadata and validates local component references" {
     #|    "examples":[{"$ref":"#/components/examplePairings/get"}]
     #|  }]
     #|}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(value) => value
     Err(diagnostics) =>
       fail("valid metadata should parse: " + diagnostics[0].message)
@@ -91,7 +91,7 @@ test "parses metadata and validates local component references" {
 test "resolves JSON Pointer tokens and rejects external references" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"components":{"schemas":{"Model/Item":{"type":"object"}}},"methods":[{"name":"inventory.get"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(value) => value
     Err(_) => fail("the pointer fixture should parse")
   }
@@ -119,7 +119,7 @@ test "reports missing and circular references in lint" {
     #|  "methods":[{"name":"inventory.get","params":[{"$ref":"#/components/contentDescriptors/missing"}]}],
     #|  "components":{"contentDescriptors":{}}
     #|}
-  match Document::parse(missing_source) {
+  match @openrpc.Document::parse(missing_source) {
     Err(diagnostics) => assert_true(diagnostics[0].code is UnresolvedReference)
     Ok(_) => fail("missing references should fail during parsing")
   }
@@ -130,7 +130,7 @@ test "reports missing and circular references in lint" {
     #|  "methods":[{"name":"inventory.get","tags":[{"$ref":"#/components/tags/a"}]}],
     #|  "components":{"tags":{"a":{"$ref":"#/components/tags/b"},"b":{"$ref":"#/components/tags/a"}}}
     #|}
-  match Document::parse(circular_source) {
+  match @openrpc.Document::parse(circular_source) {
     Err(diagnostics) => assert_true(diagnostics[0].code is CircularReference)
     Ok(_) => fail("cyclic reference chains should be rejected")
   }
@@ -145,7 +145,7 @@ test "documents lint server URL templates" {
     #|  "servers":[{"name":"primary","url":"https://{region}.example.test","variables":{"region":{"default":"prod","enum":["dev","test"]}}}],
     #|  "methods":[]
     #|}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(value) => value
     Err(_) => fail("server template fixture should parse")
   }
@@ -173,11 +173,11 @@ test "diff reports breaking and compatible contract changes" {
     #|    {"name":"inventory.list"}
     #|  ]
     #|}
-  let old_document = match Document::parse(old_source) {
+  let old_document = match @openrpc.Document::parse(old_source) {
     Ok(value) => value
     Err(_) => fail("old contract fixture should parse")
   }
-  let new_document = match Document::parse(new_source) {
+  let new_document = match @openrpc.Document::parse(new_source) {
     Ok(value) => value
     Err(_) => fail("new contract fixture should parse")
   }
@@ -221,7 +221,7 @@ test "validates examples against descriptors and referenced schemas" {
     #|    "examples":[{"name":"round-trip","params":[{"name":"sample-input","value":"hi"}],"result":{"name":"sample-output","value":"hello"}}]
     #|  }]
     #|}
-  let document = match Document::parse(valid_source) {
+  let document = match @openrpc.Document::parse(valid_source) {
     Ok(value) => value
     Err(diagnostics) =>
       fail("the valid example fixture should parse: " + diagnostics[0].message)
@@ -249,7 +249,7 @@ test "validates examples against descriptors and referenced schemas" {
     #|    "examples":[{"name":"bad-input","params":[{"name":"arbitrary-example-name","value":42}]}]
     #|  }]
     #|}
-  let invalid_document = match Document::parse(invalid_source) {
+  let invalid_document = match @openrpc.Document::parse(invalid_source) {
     Ok(value) => value
     Err(diagnostics) =>
       fail(

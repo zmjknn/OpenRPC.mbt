@@ -1,6 +1,6 @@
 ///|
-fn lint_document(source : String) -> Document raise {
-  match Document::parse(source) {
+fn lint_document(source : String) -> @openrpc.Document raise {
+  match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the lint fixture should parse before linting")
   }
@@ -8,7 +8,7 @@ fn lint_document(source : String) -> Document raise {
 
 ///|
 fn assert_lint_code(
-  diagnostics : Array[Diagnostic],
+  diagnostics : Array[@openrpc.Diagnostic],
   index : Int,
   code : String,
 ) -> Unit raise {

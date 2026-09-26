@@ -6,7 +6,7 @@ test "decodes the minimum OpenRPC document" {
     #|  "info": {"title": "Inventory", "version": "1.0.0"},
     #|  "methods": [{"name": "inventory.list"}]
     #|}
-  match Document::parse(source) {
+  match @openrpc.Document::parse(source) {
     Ok(document) => {
       assert_eq(document.openrpc, "1.4.0")
       assert_eq(document.info.title, "Inventory")
@@ -21,7 +21,7 @@ test "decodes the minimum OpenRPC document" {
 test "reports the path for an unsupported OpenRPC version" {
   let source =
     #|{"openrpc":"2.0.0","info":{"title":"x","version":"1"},"methods":[]}
-  let result = Document::parse(source)
+  let result = @openrpc.Document::parse(source)
   match result {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
@@ -36,7 +36,7 @@ test "reports the path for an unsupported OpenRPC version" {
 test "reports a missing required field" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"}}
-  let result = Document::parse(source)
+  let result = @openrpc.Document::parse(source)
   match result {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
@@ -51,7 +51,7 @@ test "reports a missing required field" {
 test "reports the indexed path for an invalid method" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{}]}
-  let result = Document::parse(source)
+  let result = @openrpc.Document::parse(source)
   match result {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
@@ -64,7 +64,7 @@ test "reports the indexed path for an invalid method" {
 
 ///|
 test "rejects a non-object document" {
-  let result = Document::parse("[]")
+  let result = @openrpc.Document::parse("[]")
   match result {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
@@ -79,7 +79,7 @@ test "rejects a non-object document" {
 test "finds a method by its contract name" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -93,7 +93,7 @@ test "finds a method by its contract name" {
 test "keeps ordered parameters and an optional result schema" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"verbose","schema":{"type":"boolean"}}],"result":{"name":"item","schema":{"type":"object"}}}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -119,7 +119,7 @@ test "keeps ordered parameters and an optional result schema" {
 test "rejects duplicate method names" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"},{"name":"inventory.get"}]}
-  match Document::parse(source) {
+  match @openrpc.Document::parse(source) {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
       assert_eq(diagnostics[0].path, "$.methods[1].name")
@@ -133,7 +133,7 @@ test "rejects duplicate method names" {
 test "rejects a parameter without a schema" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id"}]}]}
-  match Document::parse(source) {
+  match @openrpc.Document::parse(source) {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
       assert_eq(diagnostics[0].path, "$.methods[0].params[0].schema")
@@ -147,7 +147,7 @@ test "rejects a parameter without a schema" {
 test "builds a named JSON-RPC request from a method contract" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -179,7 +179,7 @@ test "builds a named JSON-RPC request from a method contract" {
 test "rejects a request that omits a required parameter" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -201,7 +201,7 @@ test "rejects a request that omits a required parameter" {
 test "rejects a request with an undeclared parameter" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -224,7 +224,7 @@ test "rejects a request with an undeclared parameter" {
 test "builds an empty params object for parameterless methods" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -247,7 +247,7 @@ test "builds an empty params object for parameterless methods" {
 test "decodes a successful response for its request id" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -261,7 +261,7 @@ test "decodes a successful response for its request id" {
     _ => fail("the response fixture should be valid JSON")
   }
   match method_value.decode_response(response, 7) {
-    Ok(RpcResponse::Result(value)) => assert_true(value is Object(_))
+    Ok(@openrpc.RpcResponse::Result(value)) => assert_true(value is Object(_))
     Ok(_) => fail("a result response should decode as a result")
     Err(_) => fail("a valid response should be accepted")
   }
@@ -271,7 +271,7 @@ test "decodes a successful response for its request id" {
 test "decodes a structured JSON-RPC error" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -285,7 +285,7 @@ test "decodes a structured JSON-RPC error" {
     _ => fail("the response fixture should be valid JSON")
   }
   match method_value.decode_response(response, "request-1") {
-    Ok(RpcResponse::Error(error_value)) => {
+    Ok(@openrpc.RpcResponse::Error(error_value)) => {
       assert_eq(error_value.code, -32001)
       assert_eq(error_value.message, "not found")
       match error_value.data {
@@ -302,7 +302,7 @@ test "decodes a structured JSON-RPC error" {
 test "rejects a response for a different request id" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -329,7 +329,7 @@ test "rejects a response for a different request id" {
 test "rejects a response without result or error" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -356,7 +356,7 @@ test "rejects a response without result or error" {
 test "rejects a response containing both result and error" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -383,7 +383,7 @@ test "rejects a response containing both result and error" {
 test "rejects a non-integer JSON-RPC error code" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -410,7 +410,7 @@ test "rejects a non-integer JSON-RPC error code" {
 test "rejects an error without a string message" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -437,7 +437,7 @@ test "rejects an error without a string message" {
 test "rejects a response with the wrong JSON-RPC version" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -464,7 +464,7 @@ test "rejects a response with the wrong JSON-RPC version" {
 test "preserves a null success result" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -478,7 +478,7 @@ test "preserves a null success result" {
     _ => fail("the response fixture should be valid JSON")
   }
   match method_value.decode_response(response, 7) {
-    Ok(RpcResponse::Result(value)) => assert_true(value is Null)
+    Ok(@openrpc.RpcResponse::Result(value)) => assert_true(value is Null)
     Ok(_) => fail("a null result should still be a result")
     Err(_) => fail("a null result is valid JSON-RPC data")
   }
@@ -488,7 +488,7 @@ test "preserves a null success result" {
 test "builds a positional JSON-RPC request in contract order" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"verbose","schema":{"type":"boolean"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -514,7 +514,7 @@ test "builds a positional JSON-RPC request in contract order" {
 test "allows omitted trailing optional positional parameters" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"verbose","schema":{"type":"boolean"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -539,7 +539,7 @@ test "allows omitted trailing optional positional parameters" {
 test "rejects a positional request that omits a required parameter" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -562,7 +562,7 @@ test "rejects a positional request that omits a required parameter" {
 test "rejects more positional values than the method declares" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -585,7 +585,7 @@ test "rejects more positional values than the method declares" {
 test "builds a named JSON-RPC notification without an id" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -612,7 +612,7 @@ test "builds a named JSON-RPC notification without an id" {
 test "builds a positional JSON-RPC notification without an id" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}},{"name":"dry_run","schema":{"type":"boolean"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -645,7 +645,7 @@ test "builds a positional JSON-RPC notification without an id" {
 test "named notifications reuse required parameter validation" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -667,7 +667,7 @@ test "named notifications reuse required parameter validation" {
 test "positional notifications reuse arity validation" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.refresh"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
@@ -690,13 +690,13 @@ test "positional notifications reuse arity validation" {
 test "builds a mixed named and positional JSON-RPC batch" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]},{"name":"inventory.refresh","params":[{"name":"scope","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = [
-    BatchCall::new(1, "inventory.get", RequestParams::named({ "id": "abc" })),
-    BatchCall::new(2, "inventory.refresh", RequestParams::positional(["all"])),
+  let calls : Array[@openrpc.BatchCall] = [
+    @openrpc.BatchCall::new(1, "inventory.get", @openrpc.RequestParams::named({ "id": "abc" })),
+    @openrpc.BatchCall::new(2, "inventory.refresh", @openrpc.RequestParams::positional(["all"])),
   ]
   match document.build_batch(calls) {
     Ok(batch) => {
@@ -723,11 +723,11 @@ test "builds a mixed named and positional JSON-RPC batch" {
 test "rejects an empty JSON-RPC batch" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = []
+  let calls : Array[@openrpc.BatchCall] = []
   match document.build_batch(calls) {
     Err(diagnostics) => {
       assert_eq(diagnostics.length(), 1)
@@ -742,12 +742,12 @@ test "rejects an empty JSON-RPC batch" {
 test "reports an unknown method at its batch index" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = [
-    BatchCall::new(1, "inventory.missing", RequestParams::named({})),
+  let calls : Array[@openrpc.BatchCall] = [
+    @openrpc.BatchCall::new(1, "inventory.missing", @openrpc.RequestParams::named({})),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -763,13 +763,13 @@ test "reports an unknown method at its batch index" {
 test "rejects duplicate request ids in a batch" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = [
-    BatchCall::new(1, "inventory.list", RequestParams::named({})),
-    BatchCall::new(1, "inventory.list", RequestParams::named({})),
+  let calls : Array[@openrpc.BatchCall] = [
+    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::named({})),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -785,12 +785,12 @@ test "rejects duplicate request ids in a batch" {
 test "prefixes named parameter diagnostics with the batch index" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = [
-    BatchCall::new(1, "inventory.get", RequestParams::named({})),
+  let calls : Array[@openrpc.BatchCall] = [
+    @openrpc.BatchCall::new(1, "inventory.get", @openrpc.RequestParams::named({})),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -806,12 +806,12 @@ test "prefixes named parameter diagnostics with the batch index" {
 test "prefixes unknown named parameters with the batch index" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = [
-    BatchCall::new(1, "inventory.list", RequestParams::named({ "extra": true })),
+  let calls : Array[@openrpc.BatchCall] = [
+    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::named({ "extra": true })),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -827,12 +827,12 @@ test "prefixes unknown named parameters with the batch index" {
 test "prefixes positional arity diagnostics with the batch index" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"inventory.list"}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the fixture should be valid")
   }
-  let calls : Array[BatchCall] = [
-    BatchCall::new(1, "inventory.list", RequestParams::positional([true])),
+  let calls : Array[@openrpc.BatchCall] = [
+    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::positional([true])),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {

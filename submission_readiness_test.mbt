@@ -1,6 +1,6 @@
 ///|
 test "the quickstart contract parses, lints, and builds a request" {
-  let document = match Document::parse(quickstart_source()) {
+  let document = match @openrpc.Document::parse(@openrpc.quickstart_source()) {
     Ok(value) => value
     Err(_) => fail("the documented example contract should parse")
   }
@@ -17,7 +17,7 @@ test "the quickstart contract parses, lints, and builds a request" {
 
 ///|
 test "the quickstart summary names the parsed method" {
-  match quickstart_summary() {
+  match @openrpc.quickstart_summary() {
     Ok(summary) => assert_true(summary.contains("inventory.get"))
     Err(_) => fail("the quickstart summary should not fail")
   }
