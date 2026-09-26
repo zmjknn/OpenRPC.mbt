@@ -695,8 +695,16 @@ test "builds a mixed named and positional JSON-RPC batch" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[@openrpc.BatchCall] = [
-    @openrpc.BatchCall::new(1, "inventory.get", @openrpc.RequestParams::named({ "id": "abc" })),
-    @openrpc.BatchCall::new(2, "inventory.refresh", @openrpc.RequestParams::positional(["all"])),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.get",
+      @openrpc.RequestParams::named({ "id": "abc" }),
+    ),
+    @openrpc.BatchCall::new(
+      2,
+      "inventory.refresh",
+      @openrpc.RequestParams::positional(["all"]),
+    ),
   ]
   match document.build_batch(calls) {
     Ok(batch) => {
@@ -747,7 +755,11 @@ test "reports an unknown method at its batch index" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[@openrpc.BatchCall] = [
-    @openrpc.BatchCall::new(1, "inventory.missing", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.missing",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -768,8 +780,16 @@ test "rejects duplicate request ids in a batch" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[@openrpc.BatchCall] = [
-    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::named({})),
-    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.list",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.list",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -811,7 +831,11 @@ test "prefixes unknown named parameters with the batch index" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[@openrpc.BatchCall] = [
-    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::named({ "extra": true })),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.list",
+      @openrpc.RequestParams::named({ "extra": true }),
+    ),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {
@@ -832,7 +856,11 @@ test "prefixes positional arity diagnostics with the batch index" {
     Err(_) => fail("the fixture should be valid")
   }
   let calls : Array[@openrpc.BatchCall] = [
-    @openrpc.BatchCall::new(1, "inventory.list", @openrpc.RequestParams::positional([true])),
+    @openrpc.BatchCall::new(
+      1,
+      "inventory.list",
+      @openrpc.RequestParams::positional([true]),
+    ),
   ]
   match document.build_batch(calls) {
     Err(diagnostics) => {

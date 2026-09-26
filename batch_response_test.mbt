@@ -25,8 +25,16 @@ fn batch_document_fixture() -> @openrpc.Document raise {
 ///|
 fn batch_calls_fixture() -> Array[@openrpc.BatchCall] {
   [
-    @openrpc.BatchCall::new(101, "inventory.get", @openrpc.RequestParams::named({})),
-    @openrpc.BatchCall::new(202, "inventory.delete", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      101,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      202,
+      "inventory.delete",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
 }
 
@@ -228,7 +236,11 @@ test "reports an undeclared method in the original call list" {
   let response_source =
     #|[{"jsonrpc":"2.0","id":303,"result":true}]
   let calls = [
-    @openrpc.BatchCall::new(303, "inventory.missing", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      303,
+      "inventory.missing",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match
     batch_document_fixture().decode_batch_response(
@@ -280,7 +292,13 @@ test "matches structured JSON ids rather than stringifying them" {
 test "correlates a single successful call" {
   let response_source =
     #|[{"jsonrpc":"2.0","id":101,"result":null}]
-  let calls = [@openrpc.BatchCall::new(101, "inventory.get", @openrpc.RequestParams::named({}))]
+  let calls = [
+    @openrpc.BatchCall::new(
+      101,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
+  ]
   match
     batch_document_fixture().decode_batch_response(
       response_fixture(response_source),
@@ -289,7 +307,8 @@ test "correlates a single successful call" {
     Ok(values) =>
       match values[0].response {
         @openrpc.RpcResponse::Result(value) => assert_true(value is Null)
-        @openrpc.RpcResponse::Error(_) => fail("the response should be a result")
+        @openrpc.RpcResponse::Error(_) =>
+          fail("the response should be a result")
       }
     Err(_) => fail("a single valid response should correlate")
   }
@@ -300,9 +319,21 @@ test "a missing response takes precedence after valid items" {
   let response_source =
     #|[{"jsonrpc":"2.0","id":202,"result":true}]
   let calls = [
-    @openrpc.BatchCall::new(101, "inventory.get", @openrpc.RequestParams::named({})),
-    @openrpc.BatchCall::new(202, "inventory.delete", @openrpc.RequestParams::named({})),
-    @openrpc.BatchCall::new(303, "inventory.get", @openrpc.RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      101,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      202,
+      "inventory.delete",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      303,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match
     batch_document_fixture().decode_batch_response(
