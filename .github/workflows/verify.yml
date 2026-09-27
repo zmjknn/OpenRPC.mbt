@@ -20,11 +20,11 @@ jobs:
       - name: Format check
         run: moon fmt --check
       - name: Type check
-        run: moon check --target wasm-gc
+        run: moon check --deny-warn --target wasm-gc
       - name: Build wasm-gc
         run: moon build --target wasm-gc
       - name: Run tests
-        run: moon test --target wasm-gc
+        run: moon test --deny-warn --target wasm-gc
       - name: Run quickstart example
         run: moon run examples/quickstart --target wasm-gc
       - name: Build Mooncakes package archive

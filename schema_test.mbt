@@ -7,7 +7,7 @@ fn schema_fixture(source : String) -> Json raise {
 
 ///|
 fn assert_schema_accepts(value : Json, schema : Json) -> Unit raise {
-  match validate_schema(value, schema) {
+  match @openrpc.validate_schema(value, schema) {
     Ok(_) => ()
     Err(diagnostics) =>
       fail("expected schema acceptance, got " + diagnostics[0].message)
@@ -21,7 +21,7 @@ fn assert_schema_rejects(
   expected_violation : Bool,
   expected_path : String,
 ) -> Unit raise {
-  match validate_schema(value, schema) {
+  match @openrpc.validate_schema(value, schema) {
     Ok(_) => fail("expected schema rejection")
     Err(diagnostics) => {
       assert_true(diagnostics.length() > 0)
@@ -55,6 +55,14 @@ test "reports a primitive schema mismatch" {
 test "supports boolean schemas" {
   assert_schema_accepts(Json::string("ok"), true)
   assert_schema_rejects(Json::string("blocked"), false, true, "$")
+}
+
+///|
+test "requires document context to validate schema references" {
+  let source =
+    #|{"$ref":"#/components/schemas/Text"}
+  let schema = schema_fixture(source)
+  assert_schema_rejects(Json::string("ok"), schema, false, "$.$ref")
 }
 
 ///|
@@ -356,7 +364,7 @@ test "validates declared parameter and result schemas" {
     #|  "info":{"title":"Inventory","version":"1"},
     #|  "methods":[{"name":"inventory.get","params":[{"name":"id","required":true,"schema":{"type":"string"}},{"name":"limit","schema":{"type":"integer","minimum":1}}],"result":{"name":"item","schema":{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}}}]
     #|}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(value) => value
     Err(_) => fail("the OpenRPC schema fixture should parse")
   }
@@ -410,7 +418,7 @@ test "validates declared parameter and result schemas" {
 test "validates positional parameter schemas and optional omissions" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"sum","params":[{"name":"left","required":true,"schema":{"type":"integer"}},{"name":"right","schema":{"type":"integer"}}]}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(value) => value
     Err(_) => fail("the fixture should parse")
   }
@@ -439,7 +447,7 @@ test "validates positional parameter schemas and optional omissions" {
 test "parameter and result validation expose stable paths" {
   let source =
     #|{"openrpc":"1.4.0","info":{"title":"x","version":"1"},"methods":[{"name":"count","params":[{"name":"token","required":true,"schema":{"type":"string","minLength":3}}],"result":{"name":"count","schema":{"type":"integer","minimum":0}}}]}
-  let document = match Document::parse(source) {
+  let document = match @openrpc.Document::parse(source) {
     Ok(value) => value
     Err(_) => fail("the fixture should parse")
   }

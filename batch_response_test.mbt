@@ -6,7 +6,7 @@ fn response_fixture(source : String) -> Json raise {
 }
 
 ///|
-fn batch_document_fixture() -> Document raise {
+fn batch_document_fixture() -> @openrpc.Document raise {
   let source =
     #|{
     #|  "openrpc":"1.4.0",
@@ -16,17 +16,25 @@ fn batch_document_fixture() -> Document raise {
     #|    {"name":"inventory.delete"}
     #|  ]
     #|}
-  match Document::parse(source) {
+  match @openrpc.Document::parse(source) {
     Ok(document) => document
     Err(_) => fail("the batch document fixture should parse")
   }
 }
 
 ///|
-fn batch_calls_fixture() -> Array[BatchCall] {
+fn batch_calls_fixture() -> Array[@openrpc.BatchCall] {
   [
-    BatchCall::new(101, "inventory.get", RequestParams::named({})),
-    BatchCall::new(202, "inventory.delete", RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      101,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      202,
+      "inventory.delete",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
 }
 
@@ -62,11 +70,11 @@ test "preserves structured errors in a correlated batch" {
   match result {
     Ok(values) =>
       match values[1].response {
-        RpcResponse::Error(error_value) => {
+        @openrpc.RpcResponse::Error(error_value) => {
           assert_eq(error_value.code, -32000)
           assert_eq(error_value.message, "not found")
         }
-        RpcResponse::Result(_) =>
+        @openrpc.RpcResponse::Result(_) =>
           fail("the second response should remain an error")
       }
     Err(_) => fail("a valid error envelope should be preserved")
@@ -228,7 +236,11 @@ test "reports an undeclared method in the original call list" {
   let response_source =
     #|[{"jsonrpc":"2.0","id":303,"result":true}]
   let calls = [
-    BatchCall::new(303, "inventory.missing", RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      303,
+      "inventory.missing",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match
     batch_document_fixture().decode_batch_response(
@@ -252,15 +264,15 @@ test "matches structured JSON ids rather than stringifying them" {
   let delete_id_source =
     #|{"scope":"delete"}
   let calls = [
-    BatchCall::new(
+    @openrpc.BatchCall::new(
       response_fixture(get_id_source),
       "inventory.get",
-      RequestParams::named({}),
+      @openrpc.RequestParams::named({}),
     ),
-    BatchCall::new(
+    @openrpc.BatchCall::new(
       response_fixture(delete_id_source),
       "inventory.delete",
-      RequestParams::named({}),
+      @openrpc.RequestParams::named({}),
     ),
   ]
   match
@@ -280,7 +292,13 @@ test "matches structured JSON ids rather than stringifying them" {
 test "correlates a single successful call" {
   let response_source =
     #|[{"jsonrpc":"2.0","id":101,"result":null}]
-  let calls = [BatchCall::new(101, "inventory.get", RequestParams::named({}))]
+  let calls = [
+    @openrpc.BatchCall::new(
+      101,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
+  ]
   match
     batch_document_fixture().decode_batch_response(
       response_fixture(response_source),
@@ -288,8 +306,9 @@ test "correlates a single successful call" {
     ) {
     Ok(values) =>
       match values[0].response {
-        RpcResponse::Result(value) => assert_true(value is Null)
-        RpcResponse::Error(_) => fail("the response should be a result")
+        @openrpc.RpcResponse::Result(value) => assert_true(value is Null)
+        @openrpc.RpcResponse::Error(_) =>
+          fail("the response should be a result")
       }
     Err(_) => fail("a single valid response should correlate")
   }
@@ -300,9 +319,21 @@ test "a missing response takes precedence after valid items" {
   let response_source =
     #|[{"jsonrpc":"2.0","id":202,"result":true}]
   let calls = [
-    BatchCall::new(101, "inventory.get", RequestParams::named({})),
-    BatchCall::new(202, "inventory.delete", RequestParams::named({})),
-    BatchCall::new(303, "inventory.get", RequestParams::named({})),
+    @openrpc.BatchCall::new(
+      101,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      202,
+      "inventory.delete",
+      @openrpc.RequestParams::named({}),
+    ),
+    @openrpc.BatchCall::new(
+      303,
+      "inventory.get",
+      @openrpc.RequestParams::named({}),
+    ),
   ]
   match
     batch_document_fixture().decode_batch_response(

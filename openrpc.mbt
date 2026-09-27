@@ -2,6 +2,7 @@
 pub struct Info {
   title : String
   version : String
+  description : String?
 }
 
 ///|
@@ -9,12 +10,16 @@ pub struct Parameter {
   name : String
   required : Bool
   schema : Json
+  description : String?
+  examples : Array[Example]
 }
 
 ///|
 pub struct ResultDescriptor {
   name : String
   schema : Json
+  description : String?
+  examples : Array[Example]
 }
 
 ///|
@@ -22,6 +27,12 @@ pub struct Method {
   name : String
   params : Array[Parameter]
   result : ResultDescriptor?
+  summary : String?
+  description : String?
+  deprecated : Bool
+  tags : Array[Tag]
+  servers : Array[Server]
+  examples : Array[ExamplePairing]
 }
 
 ///|
@@ -29,6 +40,10 @@ pub struct Document {
   openrpc : String
   info : Info
   methods : Array[Method]
+  servers : Array[Server]
+  tags : Array[Tag]
+  components : Components
+  source : Json
 }
 
 ///|
@@ -60,6 +75,14 @@ pub enum DiagnosticCode {
   MissingResponse
   ResponseIdMismatch
   InvalidRpcError
+  DuplicateTag
+  UnsupportedReference
+  UnresolvedReference
+  CircularReference
+  InvalidServerTemplate
+  UnknownServerVariable
+  InvalidServerVariableValue
+  InvalidExamplePairing
 }
 
 ///|
@@ -737,7 +760,7 @@ fn parse_document(value : Json) -> Result[Document, Array[Diagnostic]] {
   }
   let methods = match root.get("methods") {
     Some(Array(methods)) =>
-      match parse_methods(methods) {
+      match parse_methods(methods, value) {
         Ok(value) => value
         Err(diagnostics) => return Err(diagnostics)
       }
@@ -750,7 +773,27 @@ fn parse_document(value : Json) -> Result[Document, Array[Diagnostic]] {
         diagnostic("$.methods", MissingField, "required field is missing"),
       ])
   }
-  Ok({ openrpc: version, info, methods, })
+  let servers = match parse_optional_servers(root.get("servers"), "$.servers") {
+    Ok(value) => value
+    Err(diagnostics) => return Err(diagnostics)
+  }
+  let tags = match parse_optional_tags(root.get("tags"), "$.tags", value) {
+    Ok(value) => value
+    Err(diagnostics) => return Err(diagnostics)
+  }
+  let components = match parse_components(root.get("components")) {
+    Ok(value) => value
+    Err(diagnostics) => return Err(diagnostics)
+  }
+  Ok({
+    openrpc: version,
+    info,
+    methods,
+    servers,
+    tags,
+    components,
+    source: value,
+  })
 }
 
 ///|
@@ -777,17 +820,27 @@ fn parse_info(value : Map[String, Json]) -> Result[Info, Array[Diagnostic]] {
         diagnostic("$.info.version", MissingField, "required field is missing"),
       ])
   }
-  Ok({ title, version, })
+  let description = match
+    parse_optional_string(value, "description", "$.info") {
+    Ok(value) => value
+    Err(diagnostics) => return Err(diagnostics)
+  }
+  Ok({ title, version, description, })
 }
 
 ///|
 fn parse_methods(
   values : Array[Json],
+  root : Json,
 ) -> Result[Array[Method], Array[Diagnostic]] {
   let methods : Array[Method] = []
   let names : Map[String, Bool] = Map([])
-  for index, value in values {
+  for index, raw_value in values {
     let method_path = "$.methods[" + index.to_string() + "]"
+    let value = match resolve_reference_value(root, raw_value, method_path) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
     guard value is Object(method_object) else {
       return Err([
         diagnostic(method_path, ExpectedObject, "each method must be an object"),
@@ -825,7 +878,7 @@ fn parse_methods(
     let params = match method_object.get("params") {
       None => []
       Some(Array(values)) =>
-        match parse_parameters(values, method_path) {
+        match parse_parameters(values, method_path, root) {
           Ok(value) => value
           Err(diagnostics) => return Err(diagnostics)
         }
@@ -840,21 +893,82 @@ fn parse_methods(
     }
     let result = match method_object.get("result") {
       None => None
-      Some(Object(value)) =>
-        match parse_result(value, method_path) {
-          Ok(value) => Some(value)
+      Some(raw_result) => {
+        let resolved_result = match
+          resolve_reference_value(root, raw_result, method_path + ".result") {
+          Ok(value) => value
           Err(diagnostics) => return Err(diagnostics)
         }
-      Some(_) =>
-        return Err([
-          diagnostic(
-            method_path + ".result",
-            InvalidField,
-            "result must be an object",
-          ),
-        ])
+        match resolved_result {
+          Object(value) =>
+            match parse_result(value, method_path, root) {
+              Ok(value) => Some(value)
+              Err(diagnostics) => return Err(diagnostics)
+            }
+          _ =>
+            return Err([
+              diagnostic(
+                method_path + ".result",
+                InvalidField,
+                "result must be an object or reference",
+              ),
+            ])
+        }
+      }
     }
-    methods.push({ name, params, result, })
+    let summary = match
+      parse_optional_string(method_object, "summary", method_path) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    let description = match
+      parse_optional_string(method_object, "description", method_path) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    let deprecated = match
+      parse_optional_bool(method_object, "deprecated", method_path) {
+      Ok(Some(value)) => value
+      Ok(None) => false
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    let tags = match
+      parse_optional_tags(
+        method_object.get("tags"),
+        method_path + ".tags",
+        root,
+      ) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    let servers = match
+      parse_optional_servers(
+        method_object.get("servers"),
+        method_path + ".servers",
+      ) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    let examples = match
+      parse_optional_example_pairings(
+        method_object.get("examples"),
+        method_path + ".examples",
+        root,
+      ) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    methods.push({
+      name,
+      params,
+      result,
+      summary,
+      description,
+      deprecated,
+      tags,
+      servers,
+      examples,
+    })
   }
   Ok(methods)
 }
@@ -863,10 +977,15 @@ fn parse_methods(
 fn parse_parameters(
   values : Array[Json],
   method_path : String,
+  root : Json,
 ) -> Result[Array[Parameter], Array[Diagnostic]] {
   let params : Array[Parameter] = []
-  for index, value in values {
+  for index, raw_value in values {
     let param_path = method_path + ".params[" + index.to_string() + "]"
+    let value = match resolve_reference_value(root, raw_value, param_path) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
     guard value is Object(parameter_object) else {
       return Err([
         diagnostic(
@@ -919,7 +1038,21 @@ fn parse_parameters(
           ),
         ])
     }
-    params.push({ name, required, schema, })
+    let description = match
+      parse_optional_string(parameter_object, "description", param_path) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    let examples = match
+      parse_optional_examples(
+        parameter_object.get("examples"),
+        param_path + ".examples",
+        root,
+      ) {
+      Ok(value) => value
+      Err(diagnostics) => return Err(diagnostics)
+    }
+    params.push({ name, required, schema, description, examples, })
   }
   Ok(params)
 }
@@ -928,6 +1061,7 @@ fn parse_parameters(
 fn parse_result(
   value : Map[String, Json],
   method_path : String,
+  root : Json,
 ) -> Result[ResultDescriptor, Array[Diagnostic]] {
   let name = match value.get("name") {
     Some(String(value)) => value
@@ -959,7 +1093,21 @@ fn parse_result(
         ),
       ])
   }
-  Ok({ name, schema, })
+  let description = match
+    parse_optional_string(value, "description", method_path + ".result") {
+    Ok(value) => value
+    Err(diagnostics) => return Err(diagnostics)
+  }
+  let examples = match
+    parse_optional_examples(
+      value.get("examples"),
+      method_path + ".result.examples",
+      root,
+    ) {
+    Ok(value) => value
+    Err(diagnostics) => return Err(diagnostics)
+  }
+  Ok({ name, schema, description, examples, })
 }
 
 ///|

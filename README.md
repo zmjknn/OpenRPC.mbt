@@ -10,6 +10,13 @@ This project fills a narrow gap between a JSON-RPC transport and an application:
 
 ## What works today
 
+- Parses OpenRPC 1.x document metadata, including tags, servers, server variables, method summaries, and examples.
+- Preserves reusable schemas, examples, pairings, content descriptors, errors, links, and tags under components.
+- Resolves local JSON Pointer references in method, parameter, result, tag, and example entries.
+- Validates parameter and result schemas that use nested local component references.
+- Validates parameter, result, and pairing examples against their declared schemas.
+- Expands declared server URL variables using caller overrides or defaults and enforces enum values.
+- Compares two parsed documents and classifies method, parameter, result, server, tag, and component changes.
 - Parses JSON into the required OpenRPC document, `info`, and method metadata.
 - Preserves ordered parameters (`name`, `required`, and raw `schema`) and optional result descriptors.
 - Accepts OpenRPC 1.x documents and rejects other major versions.
@@ -50,6 +57,17 @@ match @openrpc.Document::parse(source) {
 }
 ```
 
+## Install from Mooncakes
+
+After the maintainer publishes a release, add the module to a MoonBit project:
+
+```text
+moon add zmjknn/openrpc
+```
+
+Then import it as `@openrpc` as shown above. The repository quickstart can be run
+before publication with `moon run examples/quickstart --target wasm-gc`.
+
 ## Runnable quickstart
 
 The repository includes an executable consumer under `examples/quickstart`.
@@ -62,7 +80,7 @@ moon run examples/quickstart --target wasm-gc
 Expected output:
 
 ```text
-method=inventory.get, request={"jsonrpc":"2.0","id":7,"method":"inventory.get","params":{"id":"abc"}}
+method=inventory.get, server=https://dev.inventory.example/rpc, request={"jsonrpc":"2.0","id":7,"method":"inventory.get","params":{"id":"abc"}}
 ```
 
 The same contract is exercised by `submission_readiness_test.mbt`, so the
@@ -94,7 +112,31 @@ match method_value.validate_named_params(params) {
 }
 ```
 
-The validator intentionally covers a documented portable subset. It does not resolve `$ref`, load external schemas, evaluate regular-expression `pattern` or `format`, coerce values, or apply defaults. Request builders remain schema-agnostic unless one of the opt-in validation helpers is called.
+The validator intentionally covers a portable JSON Schema subset. Document-aware validation resolves local references, including references nested below object properties and composition keywords. Circular references are reported during value validation. The library does not load external schemas, evaluate regular-expression `pattern` or `format`, coerce values, or apply defaults. Request builders remain schema-agnostic unless one of the opt-in validation helpers is called.
+
+For component-backed schemas, validate through the parsed document:
+
+```moonbit
+match document.validate_named_params("inventory.get", {"id": "abc"}) {
+  Ok(_) => println("parameters satisfy the referenced schemas")
+  Err(diagnostics) => println(diagnostics[0].path + ": " + diagnostics[0].message)
+}
+```
+
+Server URL variables can be expanded without opening a connection:
+
+```moonbit
+match document.find_server("primary") {
+  Some(server) =>
+    match server.render_url({"region": "staging"}) {
+      Ok(url) => println(url)
+      Err(diagnostics) => println(diagnostics[0].message)
+    }
+  None => println("server is not declared")
+}
+```
+
+Use `Document::diff` to compare revisions. Each change includes a path, kind, and compatibility impact. `Document::resolve_ref` resolves local JSON Pointers such as `#/components/schemas/Item`; external URLs are rejected, and the library never reads files or performs network requests.
 
 Run the semantic pass after parsing when a document is being published or registered:
 
@@ -162,14 +204,14 @@ The decoder matches the request id, enforces the JSON-RPC 2.0 envelope, and pres
 ## Repository structure
 
 The implementation boundaries and package layout are documented in
-[`docs/architecture.md`](docs/architecture.md). In short, `openrpc.mbt`
-contains the document/message model, `schema.mbt` contains Schema validation,
-`lint.mbt` contains semantic checks, and `examples/quickstart` demonstrates
-consumption from a separate executable package.
+[`docs/architecture.md`](docs/architecture.md). The parser and message model
+live in `openrpc.mbt`; metadata parsing, local reference resolution, contract
+diffs, schema validation, and semantic linting are separated into focused
+modules. The quickstart demonstrates a separate executable consumer.
 
 ## Deliberate boundary
 
-The current milestone stabilizes the document model, diagnostics, transport-free request/response/notification/batch boundaries, and a small schema-validation kernel before adding code generation. The expansion roadmap in `docs/roadmap-4000-lines.md` records the next independent contract features and the line-count accounting rule (generated `_build` output is excluded). Transport, `$ref` loading from the network, code generation, and a web editor are not part of this package's current contract. Future work can build on the parsed model without duplicating those concerns.
+The library covers the document model, local reference resolution, semantic linting, schema validation, contract comparison, and transport-free request/response/notification/batch boundaries. It does not open sockets, load remote files, generate SDK code, or provide a web editor.
 
 ## Development
 
